@@ -2,19 +2,15 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPushButton,
     QSplitter,
     QVBoxLayout,
     QWidget,
 )
 
 from .calculator import ScoreCalculator
+from .components import CategoryWidget, ControlHeaderWidget, HistoryWidget, InputWidget
 from .config import DEFAULT_DECAY_RATE, MAX_DECAY, MIN_DECAY, WINDOW_SIZE, WINDOW_TITLE
 from .data_model import DataManager
 from .plot_widget import MplCanvas
@@ -37,105 +33,58 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(main_widget)
         main_layout = QHBoxLayout(main_widget)
 
-        # Left Panel
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.addWidget(QLabel("【項目一覧】"))
-        self.category_list = QListWidget()
-        self.category_list.currentItemChanged.connect(self.on_category_selected)
-        left_layout.addWidget(self.category_list)
+        # 1. 左パネル (コンポーネント化)
+        self.category_widget = CategoryWidget()
+        # シグナル接続
+        self.category_widget.category_selected.connect(self.on_category_selected)
+        self.category_widget.add_requested.connect(self.add_category_dialog)
+        self.category_widget.delete_requested.connect(self.delete_category_action)
 
-        btn_add_cat = QPushButton("項目追加")
-        btn_add_cat.clicked.connect(self.add_category_dialog)
-        left_layout.addWidget(btn_add_cat)
-
-        btn_del_cat = QPushButton("項目削除")
-        btn_del_cat.clicked.connect(self.delete_category_action)
-        left_layout.addWidget(btn_del_cat)
-
-        # Right Panel
+        # 2. 右パネル
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
 
-        # Header
-        header_layout = QHBoxLayout()
-        self.stats_label = QLabel("項目を選択してください")
-        self.stats_label.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #333;"
-        )
-        header_layout.addWidget(self.stats_label)
-        header_layout.addStretch()
-        self.decay_label = QLabel("減衰率: -")
-        header_layout.addWidget(self.decay_label)
-        self.btn_edit_decay = QPushButton("設定変更")
-        self.btn_edit_decay.setFixedWidth(80)
-        self.btn_edit_decay.clicked.connect(self.edit_decay_rate)
-        self.btn_edit_decay.setEnabled(False)
-        header_layout.addWidget(self.btn_edit_decay)
-        right_layout.addLayout(header_layout)
+        # 2-A. ヘッダー (コンポーネント化)
+        self.header_widget = ControlHeaderWidget()
+        self.header_widget.edit_decay_requested.connect(self.edit_decay_rate)
+        right_layout.addWidget(self.header_widget)
 
-        # Canvas
+        # 2-B. グラフ (既存)
         self.canvas = MplCanvas(self, width=5, height=4, dpi=100)
         right_layout.addWidget(self.canvas, stretch=2)
 
-        # Bottom Area
+        # 2-C. 下部エリア (入力 + 履歴)
         bottom_container = QWidget()
         bottom_layout = QHBoxLayout(bottom_container)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Input
-        input_group = QWidget()
-        input_v_layout = QVBoxLayout(input_group)
-        input_v_layout.addWidget(QLabel("【スコア入力】"))
-        self.score_input = QLineEdit()
-        self.score_input.setPlaceholderText("スコア (整数)")
-        self.score_input.returnPressed.connect(self.add_score_action)
-        self.score_input.setFixedHeight(40)
-        self.score_input.setStyleSheet("font-size: 14px;")
-        input_v_layout.addWidget(self.score_input)
+        # 入力ウィジェット
+        self.input_widget = InputWidget()
+        self.input_widget.score_added.connect(self.add_score_action)
+        self.input_widget.set_enabled(False)  # 初期状態は無効
 
-        btn_add_score = QPushButton("記録を追加")
-        btn_add_score.setFixedHeight(40)
-        btn_add_score.setStyleSheet("font-weight: bold; background-color: #e1f5fe;")
-        btn_add_score.clicked.connect(self.add_score_action)
-        input_v_layout.addWidget(btn_add_score)
-        input_v_layout.addStretch()
+        # 履歴ウィジェット
+        self.history_widget = HistoryWidget()
+        self.history_widget.delete_requested.connect(self.delete_score_action)
 
-        # History
-        history_group = QWidget()
-        history_v_layout = QVBoxLayout(history_group)
-        history_v_layout.addWidget(QLabel("【履歴 (上が最新)】"))
-        self.history_list = QListWidget()
-        self.history_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        history_v_layout.addWidget(self.history_list)
-        btn_del_score = QPushButton("選択した履歴を削除")
-        btn_del_score.clicked.connect(self.delete_score_action)
-        history_v_layout.addWidget(btn_del_score)
-
-        bottom_layout.addWidget(input_group, stretch=1)
-        bottom_layout.addWidget(history_group, stretch=2)
+        bottom_layout.addWidget(self.input_widget, stretch=1)
+        bottom_layout.addWidget(self.history_widget, stretch=2)
         right_layout.addWidget(bottom_container, stretch=1)
 
+        # スプリッターで左右配置
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(left_panel)
+        splitter.addWidget(self.category_widget)
         splitter.addWidget(right_panel)
         splitter.setStretchFactor(1, 3)
         main_layout.addWidget(splitter)
 
+    # --- Controller Logic ---
+
     def _refresh_category_list(self):
-        current = self.category_list.currentItem()
-        current_text = current.text() if current else None
-
-        self.category_list.clear()
-        for cat in self.manager.data.keys():
-            self.category_list.addItem(cat)
-
-        if current_text:
-            items = self.category_list.findItems(
-                current_text, Qt.MatchFlag.MatchExactly
-            )
-            if items:
-                self.category_list.setCurrentItem(items[0])
+        # 現在の選択状態を維持しつつリスト更新
+        cats = list(self.manager.data.keys())
+        current = self.current_category
+        self.category_widget.update_list(cats, current)
 
     def add_category_dialog(self):
         name, ok1 = QInputDialog.getText(self, "新規項目", "項目名を入力:")
@@ -175,61 +124,60 @@ class MainWindow(QMainWindow):
             self.update_display()
 
     def delete_category_action(self):
-        item = self.category_list.currentItem()
-        if item:
+        # コンポーネントから現在選択されているテキストを取得
+        name = self.category_widget.get_current_text()
+        if name:
             ret = QMessageBox.question(
                 self,
                 "確認",
-                f"'{item.text()}' を削除しますか？",
+                f"'{name}' を削除しますか？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if ret == QMessageBox.StandardButton.Yes:
-                self.manager.delete_category(item.text())
+                self.manager.delete_category(name)
+                # 削除後は選択を解除
+                self.current_category = None
                 self._refresh_category_list()
-                self.on_category_selected(None, None)
+                self.on_category_selected("")
 
-    def on_category_selected(
-        self, current: QListWidgetItem | None, previous: QListWidgetItem | None
-    ):
-        if not current:
+    def on_category_selected(self, category_name: str):
+        if not category_name:
             self.current_category = None
-            self.stats_label.setText("項目を選択してください")
-            self.decay_label.setText("減衰率: -")
-            self.btn_edit_decay.setEnabled(False)
-            self.score_input.setEnabled(False)
+            self.header_widget.update_info(0, 0, 0, has_selection=False)
+            self.input_widget.set_enabled(False)
             self.canvas.clear_plot()
-            self.history_list.clear()
+            self.history_widget.update_history([])
             return
 
-        self.current_category = current.text()
-        self.btn_edit_decay.setEnabled(True)
-        self.score_input.setEnabled(True)
+        self.current_category = category_name
+        self.input_widget.set_enabled(True)
         self.update_display()
 
-    def add_score_action(self):
+    def add_score_action(self, text: str):
         if not self.current_category:
             return
-        text = self.score_input.text()
-        if not text:
-            return
+
         try:
             score = int(text)
+
+            if score < 0:
+                QMessageBox.warning(
+                    self, "エラー", "スコアにマイナスの値は入力できません。"
+                )
+                return
+
             self.manager.add_score(self.current_category, score)
-            self.score_input.clear()
             self.update_display()
         except ValueError:
             QMessageBox.warning(self, "エラー", "整数を入力してください。")
 
-    def delete_score_action(self):
+    def delete_score_action(self, row_index: int):
         if not self.current_category:
             return
-        selected_items = self.history_list.selectedItems()
-        if not selected_items:
-            return
 
-        row = self.history_list.row(selected_items[0])
         scores = self.manager.get_scores(self.current_category)
-        target_index = (len(scores) - 1) - row
+        # 表示は逆順なので、モデルのインデックスに変換
+        target_index = (len(scores) - 1) - row_index
 
         val = scores[target_index]
         ret = QMessageBox.question(
@@ -243,21 +191,17 @@ class MainWindow(QMainWindow):
             self.update_display()
 
     def update_display(self):
-        """画面表示の更新処理"""
+        """画面全体の更新"""
         if not self.current_category:
             return
 
         scores = self.manager.get_scores(self.current_category)
         decay_rate = self.manager.get_decay_rate(self.current_category)
 
+        # 計算
         avg, weights = ScoreCalculator.calculate_stats(scores, decay_rate)
 
-        self.stats_label.setText(f"現在の加重平均: {avg:.2f} (データ数: {len(scores)})")
-        self.decay_label.setText(f"減衰率: {decay_rate}")
-
-        self.history_list.clear()
-        for i, score in enumerate(reversed(scores)):
-            original_idx = len(scores) - i
-            self.history_list.addItem(f"{original_idx}回目:  {score}")
-
+        # 各コンポーネントへデータを流し込む
+        self.header_widget.update_info(avg, len(scores), decay_rate, has_selection=True)
+        self.history_widget.update_history(scores)
         self.canvas.update_plot(self.current_category, avg, scores, weights, decay_rate)

@@ -2,7 +2,6 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator, ScalarFormatter
 
-# Configから色などを読み込み
 from .config import COLOR_AVG_LINE, COLOR_BAR, COLOR_BAR_EDGE
 
 
