@@ -6,30 +6,19 @@ from PySide6.QtWidgets import QApplication
 
 from score_app import MainWindow
 
-# --- 初期設定 ---
-# Matplotlibの日本語フォント設定
-rcParams["font.family"] = "sans-serif"
-rcParams["font.sans-serif"] = [
-    "Meiryo",
-    "Yu Gothic",
-    "Hiragino Sans",
-    "Takao",
-    "IPAexGothic",
-    "IPAPGothic",
-    "Noto Sans CJK JP",
-]
+# Configからフォント設定をインポート
+from score_app.config import FONT_FAMILY, FONT_LIST
 
-# バックエンド指定
+# --- 初期設定 ---
+rcParams["font.family"] = FONT_FAMILY
+rcParams["font.sans-serif"] = FONT_LIST
 matplotlib.use("QtAgg")
 
 
 def main():
     app = QApplication(sys.argv)
-
-    # メインウィンドウの作成と表示
     window = MainWindow()
     window.show()
-
     sys.exit(app.exec())
 
 

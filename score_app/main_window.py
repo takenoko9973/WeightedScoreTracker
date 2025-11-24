@@ -1,5 +1,3 @@
-# score_app/main_window.py
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -7,6 +5,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -15,37 +14,33 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .calculator import ScoreCalculator
+from .config import DEFAULT_DECAY_RATE, MAX_DECAY, MIN_DECAY, WINDOW_SIZE, WINDOW_TITLE
 from .data_model import DataManager
 from .plot_widget import MplCanvas
-
-# -----------------------------------------------------------
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Weighted Score Tracker (Package Ver.)")
-        self.resize(1100, 700)
+        self.setWindowTitle(WINDOW_TITLE)
+        self.resize(*WINDOW_SIZE)
 
         self.manager = DataManager()
-        self.current_category = None
+        self.current_category: str | None = None
 
         self._setup_ui()
         self._refresh_category_list()
-
-    # (以降のコードは前回の main_window.py と全く同じなので省略しませんが、
-    #  コピペ用に前回と同じ内容を記載しておきます)
 
     def _setup_ui(self):
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         main_layout = QHBoxLayout(main_widget)
 
-        # 左側パネル
+        # Left Panel
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.addWidget(QLabel("【項目一覧】"))
-
         self.category_list = QListWidget()
         self.category_list.currentItemChanged.connect(self.on_category_selected)
         left_layout.addWidget(self.category_list)
@@ -58,11 +53,11 @@ class MainWindow(QMainWindow):
         btn_del_cat.clicked.connect(self.delete_category_action)
         left_layout.addWidget(btn_del_cat)
 
-        # 右側パネル
+        # Right Panel
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
 
-        # ヘッダー
+        # Header
         header_layout = QHBoxLayout()
         self.stats_label = QLabel("項目を選択してください")
         self.stats_label.setStyleSheet(
@@ -79,16 +74,16 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(self.btn_edit_decay)
         right_layout.addLayout(header_layout)
 
-        # グラフ
+        # Canvas
         self.canvas = MplCanvas(self, width=5, height=4, dpi=100)
         right_layout.addWidget(self.canvas, stretch=2)
 
-        # 下部操作エリア
+        # Bottom Area
         bottom_container = QWidget()
         bottom_layout = QHBoxLayout(bottom_container)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
 
-        # 入力
+        # Input
         input_group = QWidget()
         input_v_layout = QVBoxLayout(input_group)
         input_v_layout.addWidget(QLabel("【スコア入力】"))
@@ -98,6 +93,7 @@ class MainWindow(QMainWindow):
         self.score_input.setFixedHeight(40)
         self.score_input.setStyleSheet("font-size: 14px;")
         input_v_layout.addWidget(self.score_input)
+
         btn_add_score = QPushButton("記録を追加")
         btn_add_score.setFixedHeight(40)
         btn_add_score.setStyleSheet("font-weight: bold; background-color: #e1f5fe;")
@@ -105,7 +101,7 @@ class MainWindow(QMainWindow):
         input_v_layout.addWidget(btn_add_score)
         input_v_layout.addStretch()
 
-        # 履歴
+        # History
         history_group = QWidget()
         history_v_layout = QVBoxLayout(history_group)
         history_v_layout.addWidget(QLabel("【履歴 (上が最新)】"))
@@ -129,9 +125,11 @@ class MainWindow(QMainWindow):
     def _refresh_category_list(self):
         current = self.category_list.currentItem()
         current_text = current.text() if current else None
+
         self.category_list.clear()
         for cat in self.manager.data.keys():
             self.category_list.addItem(cat)
+
         if current_text:
             items = self.category_list.findItems(
                 current_text, Qt.MatchFlag.MatchExactly
@@ -143,21 +141,34 @@ class MainWindow(QMainWindow):
         name, ok1 = QInputDialog.getText(self, "新規項目", "項目名を入力:")
         if not ok1 or not name:
             return
+
         rate, ok2 = QInputDialog.getDouble(
-            self, "重み設定", f"'{name}' の減衰率 (0.01 - 1.00):", 0.95, 0.01, 1.00, 2
+            self,
+            "重み設定",
+            f"'{name}' の減衰率 ({MIN_DECAY} - {MAX_DECAY}):",
+            DEFAULT_DECAY_RATE,
+            MIN_DECAY,
+            MAX_DECAY,
+            2,
         )
         if ok2:
             if self.manager.add_category(name, rate):
                 self._refresh_category_list()
             else:
-                QMessageBox.warning(self, "エラー", "重複しています。")
+                QMessageBox.warning(self, "エラー", "その項目名は既に存在します。")
 
     def edit_decay_rate(self):
         if not self.current_category:
             return
         current_rate = self.manager.get_decay_rate(self.current_category)
         rate, ok = QInputDialog.getDouble(
-            self, "重み設定変更", "減衰率の変更:", current_rate, 0.01, 1.00, 2
+            self,
+            "重み設定変更",
+            "減衰率の変更:",
+            current_rate,
+            MIN_DECAY,
+            MAX_DECAY,
+            2,
         )
         if ok:
             self.manager.update_decay_rate(self.current_category, rate)
@@ -177,7 +188,9 @@ class MainWindow(QMainWindow):
                 self._refresh_category_list()
                 self.on_category_selected(None, None)
 
-    def on_category_selected(self, current, previous):
+    def on_category_selected(
+        self, current: QListWidgetItem | None, previous: QListWidgetItem | None
+    ):
         if not current:
             self.current_category = None
             self.stats_label.setText("項目を選択してください")
@@ -187,6 +200,7 @@ class MainWindow(QMainWindow):
             self.canvas.clear_plot()
             self.history_list.clear()
             return
+
         self.current_category = current.text()
         self.btn_edit_decay.setEnabled(True)
         self.score_input.setEnabled(True)
@@ -212,9 +226,11 @@ class MainWindow(QMainWindow):
         selected_items = self.history_list.selectedItems()
         if not selected_items:
             return
+
         row = self.history_list.row(selected_items[0])
-        scores = self.manager.data[self.current_category]["scores"]
+        scores = self.manager.get_scores(self.current_category)
         target_index = (len(scores) - 1) - row
+
         val = scores[target_index]
         ret = QMessageBox.question(
             self,
@@ -227,15 +243,21 @@ class MainWindow(QMainWindow):
             self.update_display()
 
     def update_display(self):
+        """画面表示の更新処理"""
         if not self.current_category:
             return
-        avg, scores, weights, decay_rate = self.manager.calculate_stats(
-            self.current_category
-        )
+
+        scores = self.manager.get_scores(self.current_category)
+        decay_rate = self.manager.get_decay_rate(self.current_category)
+
+        avg, weights = ScoreCalculator.calculate_stats(scores, decay_rate)
+
         self.stats_label.setText(f"現在の加重平均: {avg:.2f} (データ数: {len(scores)})")
         self.decay_label.setText(f"減衰率: {decay_rate}")
+
         self.history_list.clear()
         for i, score in enumerate(reversed(scores)):
             original_idx = len(scores) - i
             self.history_list.addItem(f"{original_idx}回目:  {score}")
+
         self.canvas.update_plot(self.current_category, avg, scores, weights, decay_rate)
