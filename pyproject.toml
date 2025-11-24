@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "matplotlib>=3.10.7",
-    "pyside6>=6.10.1",
-]
+dependencies = ["matplotlib>=3.10.7", "pyside6>=6.10.1"]
+
+[dependency-groups]
+dev = ["nuitka>=2.8.6", "taskipy>=1.14.1"]
+
+[tool.taskipy.tasks]
+start = "python main.py"
+build = "uv run nuitka --onefile --enable-plugin=pyside6 --windows-console-mode=disable --output-dir=dist main.py"
+clean = "rmdir /s /q dist"
