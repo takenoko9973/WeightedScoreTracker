@@ -1,0 +1,55 @@
+{
+    "name": "score-tracker_rust",
+    "dockerFile": "./Dockerfile",
+    "init": true,
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "files.watcherExclude": {
+                    "**/target/**": true
+                },
+                "[rust]": {
+                    "editor.formatOnSave": true
+                },
+                "rust-analyzer.checkOnSave": true,
+                "rust-analyzer.check.command": "clippy",
+                "rust-analyzer.check.extraArgs": [
+                    "--",
+                    "-A",
+                    "clippy::needless_return"
+                ]
+            },
+            "extensions": [
+                "vadimcn.vscode-lldb",
+                "rust-lang.rust-analyzer",
+                "tamasfe.even-better-toml",
+                "donjayamanne.githistory",
+                "fill-labs.dependi"
+            ]
+        }
+    },
+    "mounts": [
+        {
+            "source": "rust-target",
+            "target": "${containerWorkspaceFolder}/target",
+            "type": "volume"
+        },
+        {
+            "source": "/run/desktop/mnt/host/wslg/.X11-unix",
+            "target": "/tmp/.X11-unix",
+            "type": "bind"
+        },
+        {
+            "source": "/run/desktop/mnt/host/wslg",
+            "target": "/mnt/wslg",
+            "type": "bind"
+        }
+    ],
+    "containerEnv": {
+        "DISPLAY": ":0",
+        "WAYLAND_DISPLAY": "wayland-0",
+        "QT_QPA_PLATFORM": "xcb",
+        "XDG_RUNTIME_DIR": "/mnt/wslg/runtime-dir",
+        "PULSE_SERVER": "/mnt/wslg/PulseServer"
+    }
+}
