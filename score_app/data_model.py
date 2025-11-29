@@ -1,7 +1,9 @@
+from typing import Any
 import json
 import logging
 import os
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 
 from .config import DATA_FILENAME, DEFAULT_DECAY_RATE
 
@@ -11,10 +13,21 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, o: Any) -> Any:
+        if isinstance(o, datetime):
+            return o.isoformat()
+
+        return super().default(o)
+
+@dataclass
+class ScoreEntry:
+    score: int
+    timestamp: datetime
 
 @dataclass
 class CategoryData:
-    scores: list[int] = field(default_factory=list)
+    scores: list[ScoreEntry] = field(default_factory=list)
     decay_rate: float = DEFAULT_DECAY_RATE
 
 
@@ -35,22 +48,27 @@ class DataManager:
                 raw_data = json.load(f)
 
             result: dict[str, CategoryData] = {}
-            should_save = False
 
             for key, val in raw_data.items():
-                if isinstance(val, list):
-                    result[key] = CategoryData(
-                        scores=val, decay_rate=DEFAULT_DECAY_RATE
-                    )
-                    should_save = True
-                elif isinstance(val, dict):
-                    scores = val.get("scores", [])
+                if isinstance(val, dict):
+                    scores_raw = val.get("scores", [])
                     decay = val.get("decay_rate", DEFAULT_DECAY_RATE)
-                    result[key] = CategoryData(scores=scores, decay_rate=decay)
+                    score_entries: list[ScoreEntry] = []
 
-            if should_save:
-                logger.info("旧データ形式を変換しました。")
-                self.save_data_direct(result)
+                    for entry_data in scores_raw:
+                        if isinstance(entry_data, dict):
+                            ts_str = entry_data.get("timestamp")
+                            try:
+                                ts = datetime.fromisoformat(ts_str) if ts_str else datetime.now(timezone.utc)
+                            except ValueError:
+                                ts = datetime.now(timezone.utc)
+
+                            score_entries.append(ScoreEntry(
+                                score=entry_data.get("score", 0),
+                                timestamp=ts
+                            ))
+
+                    result[key] = CategoryData(scores=score_entries, decay_rate=decay)
 
             logger.info(f"データを読み込みました: {len(result)}件のカテゴリ")
             return result
@@ -66,11 +84,10 @@ class DataManager:
         try:
             json_ready_data = {k: asdict(v) for k, v in data_to_save.items()}
             with open(self.filename, "w", encoding="utf-8") as f:
-                json.dump(json_ready_data, f, ensure_ascii=False, indent=4)
+                json.dump(json_ready_data, f, ensure_ascii=False, indent=4, cls=DateTimeEncoder)
         except IOError as e:
             logger.error(f"データ保存エラー: {e}")
 
-    # --- 以下、前回のメソッド定義と同じため省略しませんが、変更はありません ---
     def add_category(
         self, category_name: str, decay_rate: float = DEFAULT_DECAY_RATE
     ) -> bool:
@@ -92,7 +109,8 @@ class DataManager:
 
     def add_score(self, category: str, score: int) -> None:
         if category in self.data:
-            self.data[category].scores.append(int(score))
+            entry = ScoreEntry(score=int(score), timestamp=datetime.now(timezone.utc))
+            self.data[category].scores.append(entry)
             self.save_data()
 
     def delete_score_at(self, category: str, index: int) -> None:
@@ -107,7 +125,7 @@ class DataManager:
             del self.data[category]
             self.save_data()
 
-    def get_scores(self, category: str | None) -> list[int]:
+    def get_scores(self, category: str | None) -> list[ScoreEntry]:
         if category and category in self.data:
             return self.data[category].scores
         return []

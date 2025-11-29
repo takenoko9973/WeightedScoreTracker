@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 from .calculator import ScoreCalculator
 from .components import CategoryWidget, ControlHeaderWidget, HistoryWidget, InputWidget
 from .config import DEFAULT_DECAY_RATE, MAX_DECAY, MIN_DECAY, WINDOW_SIZE, WINDOW_TITLE
-from .data_model import DataManager
+from .data_model import DataManager, ScoreEntry
 from .plot_widget import MplCanvas
 
 
@@ -175,11 +175,11 @@ class MainWindow(QMainWindow):
         if not self.current_category:
             return
 
-        scores = self.manager.get_scores(self.current_category)
+        score_entries = self.manager.get_scores(self.current_category)
         # 表示は逆順なので、モデルのインデックスに変換
-        target_index = (len(scores) - 1) - row_index
+        target_index = (len(score_entries) - 1) - row_index
 
-        val = scores[target_index]
+        val = score_entries[target_index].score
         ret = QMessageBox.question(
             self,
             "確認",
@@ -195,13 +195,14 @@ class MainWindow(QMainWindow):
         if not self.current_category:
             return
 
-        scores = self.manager.get_scores(self.current_category)
+        score_entries: list[ScoreEntry] = self.manager.get_scores(self.current_category)
         decay_rate = self.manager.get_decay_rate(self.current_category)
 
         # 計算
-        avg, weights = ScoreCalculator.calculate_stats(scores, decay_rate)
+        avg, weights = ScoreCalculator.calculate_stats(score_entries, decay_rate)
 
-        # 各コンポーネントへデータを流し込む
-        self.header_widget.update_info(avg, len(scores), decay_rate, has_selection=True)
-        self.history_widget.update_history(scores)
-        self.canvas.update_plot(self.current_category, avg, scores, weights, decay_rate)
+        self.header_widget.update_info(avg, len(score_entries), decay_rate, has_selection=True)
+        self.history_widget.update_history(score_entries)
+
+        scores_for_plot = [entry.score for entry in score_entries]
+        self.canvas.update_plot(self.current_category, avg, scores_for_plot, weights, decay_rate)

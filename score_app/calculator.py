@@ -1,9 +1,12 @@
+from score_app.data_model import ScoreEntry
+
+
 class ScoreCalculator:
     """スコアの統計計算を行う純粋なロジッククラス"""
 
     @staticmethod
     def calculate_stats(
-        scores: list[int], decay_rate: float
+        score_entries: list[ScoreEntry], decay_rate: float
     ) -> tuple[float, list[float]]:
         """
         加重平均と、各スコアに対応する重みのリストを計算して返す
@@ -15,6 +18,8 @@ class ScoreCalculator:
         Returns:
             (加重平均, 重みのリスト)
         """
+        scores = [entry.score for entry in score_entries]
+
         if not scores:
             return 0.0, []
 

@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from score_app.data_model import ScoreEntry
+
 
 class CategoryWidget(QWidget):
     """左側のカテゴリ管理パネル"""
@@ -71,7 +73,6 @@ class CategoryWidget(QWidget):
 
 class ControlHeaderWidget(QWidget):
     """右上の統計情報と設定ボタン"""
-
     edit_decay_requested = Signal()
 
     def __init__(self, parent=None):
@@ -160,13 +161,18 @@ class HistoryWidget(QWidget):
         self.btn_del.clicked.connect(self._on_delete)
         layout.addWidget(self.btn_del)
 
-    def update_history(self, scores: list[int]):
+    def update_history(self, score_entries: list[ScoreEntry]):
         self.list_widget.clear()
+
         # 新しい順に表示
-        total = len(scores)
-        for i, score in enumerate(reversed(scores)):
+        total = len(score_entries)
+        for i, entry in enumerate(reversed(score_entries)):
             original_idx = total - i
-            self.list_widget.addItem(f"{original_idx}回目:  {score}")
+
+            local_dt = entry.timestamp.astimezone()
+            dt_str = local_dt.strftime("%Y-%m-%d %H:%M")
+
+            self.list_widget.addItem(f"[{dt_str}]  {original_idx}回目:  {entry.score}")
 
     def _on_delete(self):
         items = self.list_widget.selectedItems()
