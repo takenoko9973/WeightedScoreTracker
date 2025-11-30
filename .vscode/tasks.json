@@ -1,0 +1,26 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            // Ctrl + Shift + B で実行
+            "label": "Build for Windows",
+            "type": "shell",
+            "command": "cargo build --release --target x86_64-pc-windows-gnu && mkdir -p dist && cp target/x86_64-pc-windows-gnu/release/*.exe dist/",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
+        }
+    ]
+}

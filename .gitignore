@@ -10,3 +10,8 @@ wheels/
 .venv
 
 scores_data.json
+
+
+# Added by cargo
+
+/target
