@@ -7,16 +7,20 @@ pub mod side_panel;
 #[derive(Debug, Clone)]
 pub enum Action {
     // --- モーダル表示リクエスト ---
-    ShowAddCategoryModal,
-    ShowEditDecayModal,
-    ShowDeleteCategoryConfirm(String), // 対象カテゴリ名
-    ShowDeleteScoreConfirm(usize),     // 対象インデックス
+    ShowAddCategoryModal,                  // カテゴリ追加
+    ShowAddItemModal(String),              // 項目追加 (親カテゴリ名)
+    ShowEditDecayModal,                    // 減衰率更新
+    ShowDeleteCategoryConfirm(String),     // カテゴリ削除 (対象カテゴリ名)
+    ShowDeleteItemConfirm(String, String), // 項目削除 (カテゴリ名, 項目名)
+    ShowDeleteScoreConfirm(usize),         // スコア削除 (対象インデックス)
 
     // --- データ操作リクエスト ---
-    SelectCategory(String),        // カテゴリ選択
-    AddScore(String),              // スコア追加 (文字列のまま渡す)
-    ExecuteDeleteScore(usize),     // スコア削除実行
-    AddCategory(String, String),   // カテゴリ追加 (名前, 減衰率)
-    ExecuteDeleteCategory(String), // カテゴリ削除実行
-    UpdateDecayRate(String),       // 減衰率更新 (文字列)
+    SelectItem(String, String),        // 項目選択 (カテゴリ名, 項目名)
+    AddCategory(String),               // カテゴリ追加 (名前, 減衰率)
+    AddItem(String, String, String),   // 項目追加実行 (カテゴリ名, 項目名, 減衰率)
+    AddScore(String),                  // スコア追加 (スコア)
+    ExecuteDeleteCategory(String),     // カテゴリ削除実行
+    ExecuteDeleteItem(String, String), // 項目削除
+    ExecuteDeleteScore(usize),         // スコア削除実行
+    UpdateDecayRate(String),           // 減衰率更新 (文字列)
 }

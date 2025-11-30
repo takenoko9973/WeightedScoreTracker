@@ -1,8 +1,8 @@
 use std::iter::zip;
 
 use crate::app::UiState;
-use crate::logic::calculate_stats;
-use crate::models::{AppData, CategoryData, ScoreEntry};
+use crate::logic::{calculate_plot_params, calculate_stats};
+use crate::models::{AppData, ItemData, ScoreEntry};
 use crate::ui::Action;
 use eframe::egui::{self};
 use egui_plot::{Bar, BarChart, Corner, Legend, Plot};
@@ -11,27 +11,32 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
     egui::CentralPanel::default()
         .show(ctx, |ui| {
             // カテゴリ未選択
-            let Some(cat_name) = state.current_category.clone() else {
+            let (Some(cat_name), Some(item_name)) = (&state.current_category, &state.current_item)
+            else {
                 ui.centered_and_justified(|ui| {
                     ui.label("左のリストから項目を選択するか、追加してください");
                 });
                 return None;
             };
 
-            // データ取得エラー
-            let Some(category_data) = data.categories.get(&cat_name) else {
-                ui.label("データ読み込みエラー");
+            // データ取得: カテゴリ -> 項目
+            let Some(cat_data) = data.categories.get(cat_name) else {
+                ui.label("カテゴリデータ読み込みエラー");
+                return None;
+            };
+            let Some(item_data) = cat_data.items.get(item_name) else {
+                ui.label("項目データ読み込みエラー");
                 return None;
             };
 
             // ===========================================
 
             // ヘッダー
-            let header_action = draw_header(ui, category_data);
+            let header_action = draw_header(ui, item_data);
             ui.separator();
 
             // グラフ
-            draw_graph(ui, category_data, state);
+            draw_graph(ui, item_data, state);
             ui.add_space(10.0);
 
             // 入力と履歴
@@ -40,7 +45,7 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
                     // 左カラム: 入力
                     draw_input_section(&mut columns[0], state),
                     // 右カラム: 履歴
-                    draw_history_section(&mut columns[1], category_data, state),
+                    draw_history_section(&mut columns[1], item_data, state),
                 )
             });
 
@@ -50,8 +55,8 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
 }
 
 /// ヘッダー（統計情報と設定ボタン）の描画
-fn draw_header(ui: &mut egui::Ui, category_data: &CategoryData) -> Option<Action> {
-    let (avg, count, _) = calculate_stats(&category_data.scores, category_data.decay_rate);
+fn draw_header(ui: &mut egui::Ui, item_data: &ItemData) -> Option<Action> {
+    let (avg, count, _) = calculate_stats(&item_data.scores, item_data.decay_rate);
     let mut action = None;
 
     ui.horizontal(|ui| {
@@ -67,7 +72,7 @@ fn draw_header(ui: &mut egui::Ui, category_data: &CategoryData) -> Option<Action
             if ui.button("設定変更").clicked() {
                 action = Some(Action::ShowEditDecayModal);
             }
-            ui.label(format!("減衰率: {:.2}", category_data.decay_rate));
+            ui.label(format!("減衰率: {:.2}", item_data.decay_rate));
         });
     });
 
@@ -75,40 +80,17 @@ fn draw_header(ui: &mut egui::Ui, category_data: &CategoryData) -> Option<Action
 }
 
 /// グラフの描画
-fn draw_graph(ui: &mut egui::Ui, category_data: &CategoryData, state: &mut UiState) {
-    let (avg, _, weights) = calculate_stats(&category_data.scores, category_data.decay_rate);
+fn draw_graph(ui: &mut egui::Ui, item_data: &ItemData, state: &mut UiState) {
+    let (avg, _, weights) = calculate_stats(&item_data.scores, item_data.decay_rate);
     let base_color = egui::Color32::from_rgb(65, 105, 225);
 
-    // 高スコア付近の場合、変化が見えにくくなるのを防ぐ
-    // 「最小スコア - 余白」を底にして、変化を拡大表示
-    let weight_threshold = 0.1; // 計算に使用するデータの下限重み
-
-    let source_scores = Some(
-        category_data
-            .scores
-            .iter()
-            .zip(weights.iter())
-            .filter_map(|(entry, &w)| (w >= weight_threshold).then_some(entry.score))
-            .collect::<Vec<_>>(),
-    )
-    .filter(|v| !v.is_empty())
-    .unwrap_or_else(|| category_data.scores.iter().map(|s| s.score).collect());
-
-    let min_score = *source_scores.iter().min().unwrap_or(&0);
-    let max_score = *source_scores.iter().max().unwrap_or(&i32::MAX);
-
-    // 余白の計算: スコア範囲の広さに応じて調整
-    let range = (max_score - min_score) as f64;
-    let padding = range * 0.5;
-
-    // ベースライン決定 (0未満にはしない)
-    let bar_base = (min_score as f64 - padding).max(0.0);
-    // ---------------------------------------------------
+    let params = calculate_plot_params(&item_data.scores, &weights);
+    let bar_base = params.bar_base;
 
     let mut boundaries = Vec::new(); // クリック判定用のバー範囲記録
     let mut current_x = 0.0; // 棒グラフの合計横幅記録用
 
-    let bars = zip(category_data.scores.iter(), weights.iter())
+    let bars = zip(item_data.scores.iter(), weights.iter())
         .enumerate()
         .map(|(i, (entry, &weight))| {
             let width = weight; // 重みがそのまま横幅となる
@@ -231,7 +213,7 @@ fn draw_input_section(ui: &mut egui::Ui, state: &mut UiState) -> Option<Action> 
 // 履歴カラムの描画
 fn draw_history_section(
     ui: &mut egui::Ui,
-    category_data: &CategoryData,
+    item_data: &ItemData,
     state: &mut UiState,
 ) -> Option<Action> {
     let mut action = None;
@@ -244,8 +226,8 @@ fn draw_history_section(
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
-                let total = category_data.scores.len();
-                action = category_data
+                let total = item_data.scores.len();
+                action = item_data
                     .scores
                     .iter()
                     .rev()

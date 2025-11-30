@@ -6,16 +6,31 @@ use eframe::egui;
 
 #[derive(Default)]
 pub struct UiState {
+    // 選択状態
     pub current_category: Option<String>,
+    pub current_item: Option<String>,
+
+    // 入力バッファ
+    pub input_category: String, // カテゴリ名用
+    pub input_item: String,     // 項目名用
     pub input_score: String,
-    pub input_category: String,
     pub input_decay: String,
+
+    // モーダル表示フラグ
     pub show_add_category_window: bool,
+    pub show_add_item_window: bool,
     pub show_edit_decay_window: bool,
-    pub selected_history_index: Option<usize>, // バークリック挙動
+
+    // 削除確認・選択用
+    pub selected_history_index: Option<usize>, // グラフバーのクリック挙動
     pub pending_delete_category: Option<String>, // カテゴリ削除
-    pub pending_delete_index: Option<usize>,   // スコア削除確認
-    pub error_message: Option<String>,         // エラー用
+    pub pending_delete_item: Option<(String, String)>, // 項目削除確認
+    pub pending_delete_score: Option<usize>,   // スコア削除確認
+
+    pub error_message: Option<String>, // エラー用
+
+    // 項目追加時の親カテゴリ一時保存
+    pub target_category_for_new_item: Option<String>,
 }
 
 // アプリケーション状態保存
@@ -37,16 +52,24 @@ impl ScoreTracker {
         match action {
             // モーダル表示系
             Action::ShowAddCategoryModal => self.open_add_category_modal(),
+            Action::ShowAddItemModal(cat_name) => self.open_add_item_modal(cat_name),
             Action::ShowEditDecayModal => self.open_edit_decay_modal(),
-            Action::ShowDeleteCategoryConfirm(name) => self.confirm_delete_category(name),
-            Action::ShowDeleteScoreConfirm(idx) => self.confirm_delete_score(idx),
+            Action::ShowDeleteCategoryConfirm(name) => {
+                self.state.pending_delete_category = Some(name)
+            }
+            Action::ShowDeleteItemConfirm(cat, item) => {
+                self.state.pending_delete_item = Some((cat, item))
+            }
+            Action::ShowDeleteScoreConfirm(idx) => self.state.pending_delete_score = Some(idx),
 
             // データ操作系
-            Action::SelectCategory(name) => self.select_category(name),
-            Action::AddCategory(name, decay) => self.add_category(name, decay),
+            Action::SelectItem(cat, item) => self.select_item(cat, item),
+            Action::AddCategory(name) => self.add_category(name),
+            Action::AddItem(cat, name, decay) => self.add_item(cat, name, decay),
             Action::AddScore(text) => self.add_score(text),
             Action::UpdateDecayRate(rate) => self.update_decay_rate(rate),
             Action::ExecuteDeleteCategory(name) => self.execute_delete_category(name),
+            Action::ExecuteDeleteItem(cat, item) => self.execute_delete_item(cat, item),
             Action::ExecuteDeleteScore(idx) => self.execute_delete_score(idx),
         };
     }
@@ -75,45 +98,55 @@ impl ScoreTracker {
     /// カテゴリ登録
     fn open_add_category_modal(&mut self) {
         self.state.input_category.clear();
-        self.state.input_decay = "0.95".to_string();
         self.state.show_add_category_window = true;
+    }
+
+    fn open_add_item_modal(&mut self, cat_name: String) {
+        self.state.target_category_for_new_item = Some(cat_name);
+        self.state.input_item.clear();
+        self.state.input_decay = "0.95".to_string();
+        self.state.show_add_item_window = true;
     }
 
     /// 減衰率変更
     fn open_edit_decay_modal(&mut self) {
-        if let Some(cat) = &self.state.current_category
-            && let Some(d) = self.data.categories.get(cat)
+        if let (Some(c), Some(i)) = (&self.state.current_category, &self.state.current_item)
+            && let Some(cat) = self.data.categories.get(c)
+            && let Some(item) = cat.items.get(i)
         {
-            self.state.input_decay = d.decay_rate.to_string();
+            self.state.input_decay = item.decay_rate.to_string();
             self.state.show_edit_decay_window = true;
         }
-    }
-
-    /// カテゴリ削除
-    fn confirm_delete_category(&mut self, name: String) {
-        self.state.pending_delete_category = Some(name);
-    }
-
-    /// スコア削除
-    fn confirm_delete_score(&mut self, idx: usize) {
-        self.state.pending_delete_index = Some(idx);
     }
 
     // ======================================
     // データ操作
     // ======================================
 
-    /// カテゴリ選択
-    fn select_category(&mut self, name: String) {
-        self.state.current_category = Some(name);
+    /// 項目選択
+    fn select_item(&mut self, cat: String, item: String) {
+        self.state.current_category = Some(cat);
+        self.state.current_item = Some(item);
 
-        // カテゴリが変わったら入力欄と選択状態をリセットする
+        // カテゴリが変わったら入力欄と選択状態をリセット
         self.state.input_score.clear();
         self.state.selected_history_index = None;
     }
 
     /// カテゴリ登録
-    fn add_category(&mut self, name: String, decay_str: String) {
+    fn add_category(&mut self, name: String) {
+        if name.is_empty() {
+            self.state.error_message = Some("カテゴリ名を入力してください。".to_string());
+            return;
+        }
+
+        self.data.add_category(name);
+        self.save_to_file();
+        self.state.show_add_category_window = false;
+    }
+
+    /// 項目追加
+    fn add_item(&mut self, cat_name: String, name: String, decay_str: String) {
         if name.is_empty() {
             self.state.error_message = Some("項目名を入力してください。".to_string());
             return;
@@ -121,7 +154,7 @@ impl ScoreTracker {
 
         match self.validate_decay_rate(&decay_str) {
             Ok(rate) => {
-                self.data.add_category(name, rate);
+                self.data.add_item(&cat_name, name, rate);
                 self.save_to_file();
                 self.state.show_add_category_window = false;
             }
@@ -131,13 +164,14 @@ impl ScoreTracker {
 
     /// スコア追加
     fn add_score(&mut self, text: String) {
-        let Some(cat_name) = &self.state.current_category else {
+        let (Some(cat), Some(item)) = (&self.state.current_category, &self.state.current_item)
+        else {
             return;
         };
 
         match text.parse::<i32>() {
             Ok(score) if score >= 0 => {
-                self.data.add_score(cat_name, score);
+                self.data.add_score(cat, item, score);
                 self.state.input_score.clear();
                 self.save_to_file();
             }
@@ -153,13 +187,14 @@ impl ScoreTracker {
 
     /// 減衰率変更
     fn update_decay_rate(&mut self, rate_str: String) {
-        let Some(cat) = &self.state.current_category else {
+        let (Some(cat), Some(item)) = (&self.state.current_category, &self.state.current_item)
+        else {
             return;
         };
 
         match self.validate_decay_rate(&rate_str) {
             Ok(rate) => {
-                self.data.update_decay_rate(cat, rate);
+                self.data.update_decay_rate(cat, item, rate);
                 self.save_to_file();
                 self.state.show_edit_decay_window = false; // ウィンドウ非表示処理
             }
@@ -167,23 +202,35 @@ impl ScoreTracker {
         }
     }
 
-    /// カテゴリ削除
     fn execute_delete_category(&mut self, name: String) {
         self.data.remove_category(&name);
+        // 選択中のカテゴリが消えたらリセット
         if self.state.current_category.as_ref() == Some(&name) {
             self.state.current_category = None;
-            self.state.input_score.clear();
+            self.state.current_item = None;
         }
+
+        self.save_to_file();
+    }
+
+    /// 項目削除
+    fn execute_delete_item(&mut self, cat: String, item: String) {
+        self.data.remove_item(&cat, &item);
+        if self.state.current_item.as_ref() == Some(&item) {
+            self.state.current_item = None;
+        }
+
         self.save_to_file();
     }
 
     /// スコア削除
     fn execute_delete_score(&mut self, idx: usize) {
-        let Some(cat) = &self.state.current_category else {
+        let (Some(cat), Some(item)) = (&self.state.current_category, &self.state.current_item)
+        else {
             return;
         };
 
-        self.data.remove_score(cat, idx);
+        self.data.remove_score(cat, item, idx);
         self.state.selected_history_index = None;
         self.save_to_file();
     }
@@ -191,9 +238,11 @@ impl ScoreTracker {
 
 impl eframe::App for ScoreTracker {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let action = side_panel::draw(ctx, &self.data, &mut self.state)
-            .or_else(|| central_panel::draw(ctx, &self.data, &mut self.state))
-            .or_else(|| modals::draw(ctx, &self.data, &mut self.state));
+        let side_act = side_panel::draw(ctx, &self.data, &mut self.state);
+        let central_act = central_panel::draw(ctx, &self.data, &mut self.state);
+        let modal_act = modals::draw(ctx, &self.data, &mut self.state);
+
+        let action = modal_act.or(side_act).or(central_act);
 
         if let Some(act) = action {
             self.handle_action(act);
