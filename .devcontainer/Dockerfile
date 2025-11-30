@@ -27,5 +27,5 @@ RUN apt-get update; \
     rm -rf /var/lib/apt/lists/*;
 
 RUN rustup target add x86_64-pc-windows-gnu; \
-    rustup component add rustc rust-analysis rust-src rustfmt clippy; \
+    rustup component add rustc rust-analysis rust-src rustfmt clippy llvm-tools-preview; \
     cargo install cargo-edit cargo-watch cargo-update;

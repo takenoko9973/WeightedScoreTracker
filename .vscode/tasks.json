@@ -2,52 +2,25 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "type": "cargo",
-            "command": "run",
-            "problemMatcher": [
-                "$rustc"
-            ],
-            "args": [
-                "--release",
-                "--bin=score_app"
-            ],
+            // Ctrl + Shift + B で実行
+            "label": "Build for Windows",
+            "type": "shell",
+            "command": "cargo build --release --target x86_64-pc-windows-gnu && mkdir -p dist && cp target/x86_64-pc-windows-gnu/release/*.exe dist/",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "label": "rust: cargo run"
-        },
-        {
-            "type": "cargo",
-            "command": "build",
             "problemMatcher": [
                 "$rustc"
             ],
-            "args": [
-                "--release",
-                "--bin=score_app",
-                "--target=x86_64-pc-windows-gnu"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
-            "label": "rust: cross compile for windows"
-        },
-        {
-            "type": "cargo",
-            "command": "install-update",
-            "problemMatcher": [
-                "$rustc"
-            ],
-            "args": [
-                "-a",
-            ],
-            "group": {
-                "kind": "none",
-                "isDefault": false
-            },
-            "label": "rust: update all cargo installed package"
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
         }
     ]
 }

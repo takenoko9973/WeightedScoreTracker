@@ -10,3 +10,10 @@ serde = { version = "1.0", features = ["derive"] } # シリアライズ
 serde_json = "1.0"                                 # JSON操作
 chrono = { version = "0.4", features = ["serde"] } # 日時操作
 rfd = "0.16"                                       # (オプション) ファイルダイアログ等が必要なら使うが今回は不要
+
+[profile.release]
+opt-level = 3     # 最高レベルの最適化
+lto = true        # Link Time Optimization (ビルドは遅くなるが速くなる)
+codegen-units = 1 # 並列生成数を1にして最適化精度を上げる (ビルドは遅くなる)
+panic = "abort"   # パニック時にスタック巻き戻しをせず強制終了 (サイズ削減・高速化)
+strip = true      # 自動でstripする (Rust 1.59以降)
