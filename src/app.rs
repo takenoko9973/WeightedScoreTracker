@@ -42,6 +42,7 @@ impl ScoreTracker {
             Action::ShowDeleteScoreConfirm(idx) => self.confirm_delete_score(idx),
 
             // データ操作系
+            Action::SelectCategory(name) => self.select_category(name),
             Action::AddCategory(name, decay) => self.add_category(name, decay),
             Action::AddScore(text) => self.add_score(text),
             Action::UpdateDecayRate(rate) => self.update_decay_rate(rate),
@@ -101,6 +102,15 @@ impl ScoreTracker {
     // ======================================
     // データ操作
     // ======================================
+
+    /// カテゴリ選択
+    fn select_category(&mut self, name: String) {
+        self.state.current_category = Some(name);
+
+        // カテゴリが変わったら入力欄と選択状態をリセットする
+        self.state.input_score.clear();
+        self.state.selected_history_index = None;
+    }
 
     /// カテゴリ登録
     fn add_category(&mut self, name: String, decay_str: String) {

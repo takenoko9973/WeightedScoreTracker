@@ -62,9 +62,7 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
                                     )
                                     .clicked()
                                 {
-                                    state.current_category = Some(cat.clone());
-                                    state.input_score.clear();
-                                    state.selected_history_index = None; // 履歴選択状態解除
+                                    action = Some(Action::SelectCategory(cat.clone()));
                                 }
                             }
                         });

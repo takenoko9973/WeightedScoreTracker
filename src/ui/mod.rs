@@ -13,6 +13,7 @@ pub enum Action {
     ShowDeleteScoreConfirm(usize),     // 対象インデックス
 
     // --- データ操作リクエスト ---
+    SelectCategory(String),        // カテゴリ選択
     AddScore(String),              // スコア追加 (文字列のまま渡す)
     ExecuteDeleteScore(usize),     // スコア削除実行
     AddCategory(String, String),   // カテゴリ追加 (名前, 減衰率)
