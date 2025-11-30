@@ -5,7 +5,7 @@ use crate::logic::calculate_stats;
 use crate::models::{AppData, CategoryData, ScoreEntry};
 use crate::ui::Action;
 use eframe::egui::{self};
-use egui_plot::{Bar, BarChart, Legend, Plot};
+use egui_plot::{Bar, BarChart, Corner, Legend, Plot};
 
 pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<Action> {
     egui::CentralPanel::default()
@@ -79,6 +79,32 @@ fn draw_graph(ui: &mut egui::Ui, category_data: &CategoryData, state: &mut UiSta
     let (avg, _, weights) = calculate_stats(&category_data.scores, category_data.decay_rate);
     let base_color = egui::Color32::from_rgb(65, 105, 225);
 
+    // 高スコア付近の場合、変化が見えにくくなるのを防ぐ
+    // 「最小スコア - 余白」を底にして、変化を拡大表示
+    let weight_threshold = 0.1; // 計算に使用するデータの下限重み
+
+    let source_scores = Some(
+        category_data
+            .scores
+            .iter()
+            .zip(weights.iter())
+            .filter_map(|(entry, &w)| (w >= weight_threshold).then_some(entry.score))
+            .collect::<Vec<_>>(),
+    )
+    .filter(|v| !v.is_empty())
+    .unwrap_or_else(|| category_data.scores.iter().map(|s| s.score).collect());
+
+    let min_score = *source_scores.iter().min().unwrap_or(&0);
+    let max_score = *source_scores.iter().max().unwrap_or(&i32::MAX);
+
+    // 余白の計算: スコア範囲の広さに応じて調整
+    let range = (max_score - min_score) as f64;
+    let padding = range * 0.5;
+
+    // ベースライン決定 (0未満にはしない)
+    let bar_base = (min_score as f64 - padding).max(0.0);
+    // ---------------------------------------------------
+
     let mut boundaries = Vec::new(); // クリック判定用のバー範囲記録
     let mut current_x = 0.0; // 棒グラフの合計横幅記録用
 
@@ -88,7 +114,8 @@ fn draw_graph(ui: &mut egui::Ui, category_data: &CategoryData, state: &mut UiSta
             let width = weight; // 重みがそのまま横幅となる
 
             let center_x = current_x + (width / 2.0);
-            let bar = Bar::new(center_x, entry.score as f64)
+            let bar = Bar::new(center_x, (entry.score as f64 - bar_base).max(0.0))
+                .base_offset(bar_base)
                 .width(width)
                 .name(format!("{}回目", i + 1));
 
@@ -113,9 +140,10 @@ fn draw_graph(ui: &mut egui::Ui, category_data: &CategoryData, state: &mut UiSta
     let plot_height = ui.available_height() * 0.6; // 画面の6割を使う
     let plot = Plot::new("score_plot")
         .height(plot_height)
-        .legend(Legend::default())
+        .legend(Legend::default().position(Corner::RightBottom))
         .x_axis_formatter(|_, _| String::new())
         .show_x(false)
+        .allow_axis_zoom_drag(false)
         .allow_drag(false)
         .allow_zoom(false)
         .allow_scroll(false);
