@@ -12,6 +12,13 @@ pub struct ScoreEntry {
 pub struct CategoryData {
     pub scores: Vec<ScoreEntry>,
     pub decay_rate: f64,
+
+    #[serde(default = "default_created_at")] // 未設定の場合、現在時刻で埋める
+    pub created_at: DateTime<Utc>,
+}
+
+fn default_created_at() -> DateTime<Utc> {
+    Utc::now()
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -27,6 +34,7 @@ impl AppData {
             CategoryData {
                 scores: Vec::new(),
                 decay_rate,
+                created_at: Utc::now(),
             },
         );
     }

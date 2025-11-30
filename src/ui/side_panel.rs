@@ -49,11 +49,11 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
                         .show(ui, |ui| {
                             ui.set_width(ui.available_width());
 
-                            // カテゴリリスト
-                            let mut categories: Vec<_> = data.categories.keys().cloned().collect();
-                            categories.sort();
+                            // カテゴリリスト (作成順でソート)
+                            let mut categories: Vec<_> = data.categories.iter().collect();
+                            categories.sort_by(|a, b| b.1.created_at.cmp(&a.1.created_at));
 
-                            for cat in &categories {
+                            for (cat, _) in categories {
                                 let is_selected = state.current_category.as_ref() == Some(cat);
                                 if ui
                                     .add_sized(
