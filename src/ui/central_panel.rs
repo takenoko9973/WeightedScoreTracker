@@ -247,7 +247,8 @@ fn draw_history_row(
         }
 
         // ラベル作成
-        let time_str = entry.timestamp.format("%Y-%m-%d %H:%M").to_string();
+        let local_time = entry.timestamp.with_timezone(&chrono::Local);
+        let time_str = local_time.format("%Y-%m-%d %H:%M").to_string();
         let label_text = format!("[{}] {}回目: {}", time_str, original_idx + 1, entry.score);
 
         // 選択可能ラベルの描画

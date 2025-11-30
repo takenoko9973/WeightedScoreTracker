@@ -1,11 +1,11 @@
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ScoreEntry {
     pub score: i32,
-    pub timestamp: DateTime<Local>,
+    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -41,7 +41,7 @@ impl AppData {
         if let Some(cat) = self.categories.get_mut(category_name) {
             cat.scores.push(ScoreEntry {
                 score,
-                timestamp: Local::now(),
+                timestamp: Utc::now(),
             });
         }
     }
