@@ -33,10 +33,6 @@ impl ScoreTracker {
         }
     }
 
-    fn save_to_file(&self) {
-        save_data(&self.data);
-    }
-
     fn handle_action(&mut self, action: Action) {
         match action {
             // モーダル表示系
@@ -57,6 +53,12 @@ impl ScoreTracker {
     // ======================================
     // 共通処理
     // ======================================
+    fn save_to_file(&mut self) {
+        if let Err(e) = save_data(&self.data) {
+            self.state.error_message = Some(format!("保存に失敗しました: {}", e));
+        }
+    }
+
     fn validate_decay_rate(&self, rate_str: &str) -> Result<f64, String> {
         match rate_str.parse::<f64>() {
             Ok(decay_rate) if 0.0 < decay_rate && decay_rate <= 1.0 => Ok(decay_rate),

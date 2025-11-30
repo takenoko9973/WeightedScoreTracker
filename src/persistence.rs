@@ -14,9 +14,10 @@ pub fn load_data() -> Option<AppData> {
     }
 }
 
-pub fn save_data(data: &AppData) {
-    if let Ok(file) = fs::File::create(DATA_FILENAME) {
-        let writer = std::io::BufWriter::new(file);
-        let _ = serde_json::to_writer_pretty(writer, data);
-    }
+pub fn save_data(data: &AppData) -> std::io::Result<()> {
+    let file = fs::File::create(DATA_FILENAME)?;
+    let writer = std::io::BufWriter::new(file);
+
+    serde_json::to_writer_pretty(writer, data)?; // エラーを出す可能性
+    Ok(())
 }
