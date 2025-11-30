@@ -43,7 +43,51 @@ impl eframe::App for ScoreTracker {
 
         // 各パネルを描画し、保存が必要ならフラグを立てる
         side_panel::draw(ctx, &mut self.data, &mut self.state);
-        save_needed = save_needed || central_panel::draw(ctx, &mut self.data, &mut self.state);
+
+        // --- コントローラーロジック: イベント処理 ---
+        if let Some(action) = central_panel::draw(ctx, &mut self.data, &mut self.state) {
+            match action {
+                // スコア追加リクエスト
+                central_panel::Action::RequestAddScore(text) => {
+                    if let Some(cat_name) = &self.state.current_category {
+                        // ここで初めてバリデーションを行う
+                        match text.parse::<i32>() {
+                            Ok(score) if score >= 0 => {
+                                // 成功: データを追加し、入力欄をクリア
+                                self.data.add_score(cat_name, score);
+                                self.state.input_score.clear();
+                                save_needed = true;
+                            }
+                            Ok(_) => {
+                                self.state.error_message =
+                                    Some("スコアにマイナスの値は入力できません。".to_string())
+                            }
+                            Err(_) => {
+                                self.state.error_message =
+                                    Some("有効な整数値を入力してください。".to_string())
+                            }
+                        }
+                    }
+                }
+
+                // 削除リクエスト
+                central_panel::Action::RequestDeleteScore(idx) => {
+                    // 確認ダイアログを出すためにStateを更新
+                    self.state.pending_delete_index = Some(idx);
+                }
+
+                // 設定画面リクエスト
+                central_panel::Action::OpenDecaySettings => {
+                    if let Some(cat_name) = &self.state.current_category
+                        && let Some(d) = self.data.categories.get(cat_name)
+                    {
+                        self.state.input_decay = d.decay_rate.to_string();
+                        self.state.show_edit_decay_window = true;
+                    }
+                }
+            }
+        }
+
         save_needed = save_needed || modals::draw(ctx, &mut self.data, &mut self.state);
 
         if save_needed {

@@ -1,5 +1,5 @@
 use crate::app::UiState;
-use crate::models::{AppData, CategoryData};
+use crate::models::AppData;
 use eframe::egui;
 
 pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> bool {
@@ -9,7 +9,7 @@ pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> boo
     draw_error_dialog(ctx, state);
 
     // 削除確認ダイアログ
-    if draw_delete_confirm_dialog(ctx, data, state) {
+    if draw_delete_score_confirm_dialog(ctx, data, state) {
         save_needed = true;
     }
 
@@ -59,7 +59,7 @@ fn draw_error_dialog(ctx: &egui::Context, state: &mut UiState) {
     }
 }
 
-fn draw_delete_confirm_dialog(
+fn draw_delete_score_confirm_dialog(
     ctx: &egui::Context,
     data: &mut AppData,
     state: &mut UiState,
@@ -103,12 +103,9 @@ fn draw_delete_confirm_dialog(
             });
         });
 
-    if confirmed
-        && let Some(cat) = &state.current_category
-        && let Some(d) = data.categories.get_mut(cat)
-        && delete_idx < d.scores.len()
-    {
-        d.scores.remove(delete_idx);
+    if confirmed && let Some(cat) = &state.current_category {
+        data.remove_score(cat, delete_idx);
+
         save_needed = true;
         state.selected_history_index = None;
     }
@@ -125,7 +122,7 @@ fn draw_delete_category_confirm_dialog(
     data: &mut AppData,
     state: &mut UiState,
 ) -> bool {
-    let Some(cat_name) = &state.pending_delete_category else {
+    let Some(target_name) = &state.pending_delete_category else {
         return false;
     };
 
@@ -136,7 +133,7 @@ fn draw_delete_category_confirm_dialog(
     let mut confirmed = false;
 
     // 借用エラー回避のため名前をクローン
-    let target_name = cat_name.clone();
+    // let target_name = &cat_name.clone();
 
     egui::Window::new("削除確認")
         .collapsible(false)
@@ -163,10 +160,10 @@ fn draw_delete_category_confirm_dialog(
         });
 
     if confirmed {
-        data.categories.remove(&target_name);
+        data.remove_category(target_name);
 
         // 削除したカテゴリが表示中だった場合、選択を解除する
-        if state.current_category.as_ref() == Some(&target_name) {
+        if state.current_category.as_ref() == Some(target_name) {
             state.current_category = None;
             state.input_score.clear();
         }
@@ -201,13 +198,8 @@ fn draw_add_category_window(ctx: &egui::Context, data: &mut AppData, state: &mut
             ui.horizontal(|ui| {
                 if ui.button("追加").clicked() && !state.input_category.is_empty() {
                     let rate = state.input_decay.parse::<f64>().unwrap_or(0.95);
-                    data.categories.insert(
-                        state.input_category.clone(),
-                        CategoryData {
-                            scores: Vec::new(),
-                            decay_rate: rate,
-                        },
-                    );
+                    data.add_category(state.input_category.clone(), rate);
+
                     save_needed = true;
                     close_requested = true;
                 }
@@ -248,9 +240,8 @@ fn draw_edit_decay_window(ctx: &egui::Context, data: &mut AppData, state: &mut U
                 if ui.button("更新").clicked() {
                     if let Some(cat) = &state.current_category
                         && let Ok(rate) = state.input_decay.parse::<f64>()
-                        && let Some(d) = data.categories.get_mut(cat)
                     {
-                        d.decay_rate = rate;
+                        data.update_decay_rate(cat, rate);
                         save_needed = true;
                     }
                     close_requested = true;

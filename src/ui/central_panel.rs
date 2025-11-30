@@ -3,57 +3,62 @@ use std::iter::zip;
 use crate::app::UiState;
 use crate::logic::calculate_stats;
 use crate::models::{AppData, CategoryData, ScoreEntry};
-use chrono::{DateTime, Local};
 use eframe::egui::{self};
 use egui_plot::{Bar, BarChart, Legend, Plot};
+pub enum Action {
+    RequestAddScore(String),   // スコア追加リクエスト (生テキストを渡す)
+    RequestDeleteScore(usize), // スコア削除リクエスト (インデックスを渡す)
+    OpenDecaySettings,         // 設定画面を開くリクエスト
+}
 
-pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> bool {
-    let mut save_needed = false;
+pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> Option<Action> {
+    egui::CentralPanel::default()
+        .show(ctx, |ui| {
+            // カテゴリ未選択
+            let Some(cat_name) = state.current_category.clone() else {
+                ui.centered_and_justified(|ui| {
+                    ui.label("左のリストから項目を選択するか、追加してください");
+                });
+                return None;
+            };
 
-    egui::CentralPanel::default().show(ctx, |ui| {
-        // カテゴリ未選択
-        let Some(cat_name) = &state.current_category else {
-            ui.centered_and_justified(|ui| {
-                ui.label("左のリストから項目を選択するか、追加してください");
+            // データ取得エラー
+            let Some(category_data) = data.categories.get_mut(&cat_name) else {
+                ui.label("データ読み込みエラー");
+                return None;
+            };
+
+            // ===========================================
+
+            // ヘッダー
+            let header_action = draw_header(ui, category_data);
+            ui.separator();
+
+            // グラフ
+            draw_graph(ui, category_data, state);
+            ui.add_space(10.0);
+
+            // 入力と履歴
+            let (input_action, history_action) = ui.columns(2, |columns| {
+                (
+                    // 左カラム: 入力
+                    draw_input_section(&mut columns[0], state),
+                    // 右カラム: 履歴
+                    draw_history_section(&mut columns[1], category_data, state),
+                )
             });
-            return;
-        };
 
-        // データ取得エラー
-        let Some(category_data) = data.categories.get_mut(cat_name) else {
-            ui.label("データ読み込みエラー");
-            return;
-        };
-
-        // ===========================================
-
-        // ヘッダー
-        draw_header(ui, category_data, state);
-        ui.separator();
-
-        // グラフ
-        draw_graph(ui, category_data, state);
-        ui.add_space(10.0);
-
-        // 入力と履歴
-        ui.columns(2, |columns| {
-            // 左カラム: 入力
-            if draw_input_column(&mut columns[0], category_data, state) {
-                save_needed = true;
-            }
-            // 右カラム: 履歴
-            draw_history_column(&mut columns[1], category_data, state)
-        });
-    });
-
-    save_needed
+            header_action.or(input_action).or(history_action)
+        })
+        .inner
 }
 
 /// ヘッダー（統計情報と設定ボタン）の描画
-fn draw_header(ui: &mut egui::Ui, data: &CategoryData, state: &mut UiState) {
-    ui.horizontal(|ui| {
-        let (avg, count, _) = calculate_stats(&data.scores, data.decay_rate);
+fn draw_header(ui: &mut egui::Ui, data: &CategoryData) -> Option<Action> {
+    let (avg, count, _) = calculate_stats(&data.scores, data.decay_rate);
+    let mut action = None;
 
+    ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!("現在の加重平均: {:.2}", avg))
                 .size(16.0)
@@ -64,12 +69,13 @@ fn draw_header(ui: &mut egui::Ui, data: &CategoryData, state: &mut UiState) {
         // 右寄せ配置 (右から左に順番に設置)
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button("設定変更").clicked() {
-                state.input_decay = data.decay_rate.to_string();
-                state.show_edit_decay_window = true;
+                action = Some(Action::OpenDecaySettings);
             }
             ui.label(format!("減衰率: {:.2}", data.decay_rate));
         });
     });
+
+    action
 }
 
 /// グラフ（Plot）の描画
@@ -170,8 +176,8 @@ fn draw_graph(ui: &mut egui::Ui, data: &CategoryData, state: &mut UiState) {
 }
 
 /// 入力カラムの描画
-fn draw_input_column(ui: &mut egui::Ui, data: &mut CategoryData, state: &mut UiState) -> bool {
-    let mut saved = false;
+fn draw_input_section(ui: &mut egui::Ui, state: &mut UiState) -> Option<Action> {
+    let mut action = None;
 
     ui.vertical(|ui| {
         ui.label("【スコア入力】");
@@ -187,41 +193,25 @@ fn draw_input_column(ui: &mut egui::Ui, data: &mut CategoryData, state: &mut UiS
             let is_enter = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
             if is_enter || is_clicked {
-                let score_validation_result = match state.input_score.parse::<i32>() {
-                    // 整数にならなかった場合
-                    Err(_) => Err("有効な整数値を入力してください。".to_string()),
-                    // 数字だが、負の数だった場合
-                    Ok(score) if score < 0 => {
-                        Err("スコアにマイナスの値は入力できません。".to_string())
-                    }
-                    // 正常な整数の場合
-                    Ok(score) => Ok(score),
-                };
-
-                match score_validation_result {
-                    Ok(score) => {
-                        data.scores.push(ScoreEntry {
-                            score,
-                            timestamp: Local::now(),
-                        });
-                        state.input_score.clear();
-
-                        if is_enter {
-                            response.request_focus();
-                        }
-                        saved = true;
-                    }
-                    Err(msg) => state.error_message = Some(msg),
+                action = Some(Action::RequestAddScore(state.input_score.clone()));
+                if is_enter {
+                    response.request_focus();
                 }
             }
         });
     });
 
-    saved
+    action
 }
 
-/// 履歴カラムの描画
-fn draw_history_column(ui: &mut egui::Ui, data: &mut CategoryData, state: &mut UiState) {
+// 履歴カラムの描画
+fn draw_history_section(
+    ui: &mut egui::Ui,
+    data: &mut CategoryData,
+    state: &mut UiState,
+) -> Option<Action> {
+    let mut action = None;
+
     ui.vertical(|ui| {
         ui.label("【履歴】");
 
@@ -231,36 +221,53 @@ fn draw_history_column(ui: &mut egui::Ui, data: &mut CategoryData, state: &mut U
                 ui.set_width(ui.available_width());
 
                 let total = data.scores.len();
-
-                // 新しい順(rev)に表示
-                for (i, entry) in data.scores.iter().rev().enumerate() {
-                    let original_idx = total - 1 - i;
-
-                    // 日時フォーマット
-                    let local_time: DateTime<Local> = entry.timestamp;
-                    let time_str = local_time.format("%Y-%m-%d %H:%M").to_string();
-
-                    ui.horizontal(|ui| {
-                        if ui.button("🗑").clicked() {
-                            // 削除待ちのデータインデックスをセット
-                            state.pending_delete_index = Some(original_idx);
-                        }
-
-                        let is_selected = state.selected_history_index == Some(original_idx);
-                        let label_text =
-                            format!("[{}] {}回目: {}", time_str, original_idx + 1, entry.score);
-
-                        let response = ui.selectable_label(is_selected, label_text);
-                        if response.clicked() {
-                            // 履歴をクリックしても選択状態にする
-                            state.selected_history_index = Some(original_idx);
-                        }
-                        if is_selected {
-                            // 選択されたら自動スクロールで表示させる
-                            response.scroll_to_me(Some(egui::Align::Center));
-                        }
-                    });
-                }
+                action = data
+                    .scores
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .filter_map(|(i, entry)| draw_history_row(ui, entry, i, total, state))
+                    .last();
             });
     });
+
+    action
+}
+
+fn draw_history_row(
+    ui: &mut egui::Ui,
+    entry: &ScoreEntry,
+    rev_index: usize,
+    total: usize,
+    state: &mut UiState,
+) -> Option<Action> {
+    let mut action = None;
+    let original_idx = total - 1 - rev_index;
+
+    ui.horizontal(|ui| {
+        // 削除ボタン
+        if ui.button("🗑").clicked() {
+            action = Some(Action::RequestDeleteScore(original_idx));
+        }
+
+        // ラベル作成
+        let time_str = entry.timestamp.format("%Y-%m-%d %H:%M").to_string();
+        let label_text = format!("[{}] {}回目: {}", time_str, original_idx + 1, entry.score);
+
+        // 選択可能ラベルの描画
+        let is_selected = state.selected_history_index == Some(original_idx);
+        let response = ui.selectable_label(is_selected, label_text);
+
+        // クリック時の処理 (State更新)
+        if response.clicked() {
+            state.selected_history_index = Some(original_idx);
+        }
+
+        // 自動スクロール
+        if is_selected {
+            response.scroll_to_me(Some(egui::Align::Center));
+        }
+    });
+
+    action
 }
