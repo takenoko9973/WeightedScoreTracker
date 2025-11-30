@@ -3,15 +3,11 @@ use std::iter::zip;
 use crate::app::UiState;
 use crate::logic::calculate_stats;
 use crate::models::{AppData, CategoryData, ScoreEntry};
+use crate::ui::Action;
 use eframe::egui::{self};
 use egui_plot::{Bar, BarChart, Legend, Plot};
-pub enum Action {
-    RequestAddScore(String),   // スコア追加リクエスト (生テキストを渡す)
-    RequestDeleteScore(usize), // スコア削除リクエスト (インデックスを渡す)
-    OpenDecaySettings,         // 設定画面を開くリクエスト
-}
 
-pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> Option<Action> {
+pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<Action> {
     egui::CentralPanel::default()
         .show(ctx, |ui| {
             // カテゴリ未選択
@@ -23,7 +19,7 @@ pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> Opt
             };
 
             // データ取得エラー
-            let Some(category_data) = data.categories.get_mut(&cat_name) else {
+            let Some(category_data) = data.categories.get(&cat_name) else {
                 ui.label("データ読み込みエラー");
                 return None;
             };
@@ -54,8 +50,8 @@ pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> Opt
 }
 
 /// ヘッダー（統計情報と設定ボタン）の描画
-fn draw_header(ui: &mut egui::Ui, data: &CategoryData) -> Option<Action> {
-    let (avg, count, _) = calculate_stats(&data.scores, data.decay_rate);
+fn draw_header(ui: &mut egui::Ui, category_data: &CategoryData) -> Option<Action> {
+    let (avg, count, _) = calculate_stats(&category_data.scores, category_data.decay_rate);
     let mut action = None;
 
     ui.horizontal(|ui| {
@@ -69,24 +65,24 @@ fn draw_header(ui: &mut egui::Ui, data: &CategoryData) -> Option<Action> {
         // 右寄せ配置 (右から左に順番に設置)
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button("設定変更").clicked() {
-                action = Some(Action::OpenDecaySettings);
+                action = Some(Action::ShowEditDecayModal);
             }
-            ui.label(format!("減衰率: {:.2}", data.decay_rate));
+            ui.label(format!("減衰率: {:.2}", category_data.decay_rate));
         });
     });
 
     action
 }
 
-/// グラフ（Plot）の描画
-fn draw_graph(ui: &mut egui::Ui, data: &CategoryData, state: &mut UiState) {
-    let (avg, _, weights) = calculate_stats(&data.scores, data.decay_rate);
+/// グラフの描画
+fn draw_graph(ui: &mut egui::Ui, category_data: &CategoryData, state: &mut UiState) {
+    let (avg, _, weights) = calculate_stats(&category_data.scores, category_data.decay_rate);
     let base_color = egui::Color32::from_rgb(65, 105, 225);
 
     let mut boundaries = Vec::new(); // クリック判定用のバー範囲記録
     let mut current_x = 0.0; // 棒グラフの合計横幅記録用
 
-    let bars = zip(data.scores.iter(), weights.iter())
+    let bars = zip(category_data.scores.iter(), weights.iter())
         .enumerate()
         .map(|(i, (entry, &weight))| {
             let width = weight; // 重みがそのまま横幅となる
@@ -193,7 +189,7 @@ fn draw_input_section(ui: &mut egui::Ui, state: &mut UiState) -> Option<Action> 
             let is_enter = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
             if is_enter || is_clicked {
-                action = Some(Action::RequestAddScore(state.input_score.clone()));
+                action = Some(Action::AddScore(state.input_score.clone()));
                 if is_enter {
                     response.request_focus();
                 }
@@ -207,7 +203,7 @@ fn draw_input_section(ui: &mut egui::Ui, state: &mut UiState) -> Option<Action> 
 // 履歴カラムの描画
 fn draw_history_section(
     ui: &mut egui::Ui,
-    data: &mut CategoryData,
+    category_data: &CategoryData,
     state: &mut UiState,
 ) -> Option<Action> {
     let mut action = None;
@@ -220,8 +216,8 @@ fn draw_history_section(
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
-                let total = data.scores.len();
-                action = data
+                let total = category_data.scores.len();
+                action = category_data
                     .scores
                     .iter()
                     .rev()
@@ -247,7 +243,7 @@ fn draw_history_row(
     ui.horizontal(|ui| {
         // 削除ボタン
         if ui.button("🗑").clicked() {
-            action = Some(Action::RequestDeleteScore(original_idx));
+            action = Some(Action::ShowDeleteScoreConfirm(original_idx));
         }
 
         // ラベル作成

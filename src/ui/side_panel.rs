@@ -1,9 +1,12 @@
 use crate::app::UiState;
 use crate::models::AppData;
+use crate::ui::Action;
 use eframe::egui;
 
 // 項目欄
-pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) {
+pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<Action> {
+    let mut action = None;
+
     egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(ctx, |ui| {
@@ -25,13 +28,16 @@ pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) {
 
                     for cat in &categories {
                         let is_selected = state.current_category.as_ref() == Some(cat);
-                        let category_buttom = egui::Button::new(cat).selected(is_selected);
                         if ui
-                            .add_sized(egui::vec2(ui.available_width(), 20.0), category_buttom)
+                            .add_sized(
+                                egui::vec2(ui.available_width(), 20.0),
+                                egui::Button::new(cat).selected(is_selected),
+                            )
                             .clicked()
                         {
                             state.current_category = Some(cat.clone());
                             state.input_score.clear();
+                            state.selected_history_index = None; // 履歴選択状態解除
                         }
                     }
                 });
@@ -44,30 +50,28 @@ pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) {
 
             ui.separator();
 
-            // === 追加ボタン
             let btn_size = egui::vec2(ui.available_width(), 30.0);
-            if ui
+
+            // === 追加ボタン
+            let register_clicked = ui
                 .add_sized(btn_size, egui::Button::new("＋ 項目追加"))
-                .clicked()
-            {
-                state.input_category.clear();
-                state.input_decay = "0.95".to_string();
-                state.show_add_category_window = true;
+                .clicked();
+            if register_clicked {
+                action = Some(Action::ShowAddCategoryModal);
             }
 
             // === カテゴリ削除ボタン
             let is_selected = state.current_category.is_some(); // 選択確認
-            let delete_btn_response = ui
+            let delete_clicked = ui
                 .add_enabled_ui(is_selected, |ui| {
                     ui.add_sized(btn_size, egui::Button::new("🗑 項目削除"))
                 })
-                .inner;
-
-            if delete_btn_response.clicked()
-                && let Some(current) = &state.current_category
-            {
-                // 確認用変数をセット
-                state.pending_delete_category = Some(current.clone());
+                .inner
+                .clicked();
+            if delete_clicked && let Some(current) = &state.current_category {
+                action = Some(Action::ShowDeleteCategoryConfirm(current.clone()));
             }
         });
+
+    action
 }

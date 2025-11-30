@@ -1,33 +1,28 @@
 use crate::app::UiState;
 use crate::models::AppData;
+use crate::ui::Action;
 use eframe::egui;
 
-pub fn draw(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> bool {
-    let mut save_needed = false;
-
+pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<Action> {
     // エラーダイアログ
     draw_error_dialog(ctx, state);
 
-    // 削除確認ダイアログ
-    if draw_delete_score_confirm_dialog(ctx, data, state) {
-        save_needed = true;
-    }
-
-    if draw_delete_category_confirm_dialog(ctx, data, state) {
-        save_needed = true;
-    }
-
     // カテゴリ追加ウィンドウ
-    if draw_add_category_window(ctx, data, state) {
-        save_needed = true;
-    }
+    let add_category_action = draw_add_category_window(ctx, state);
 
     // 減衰率変更ウィンドウ
-    if draw_edit_decay_window(ctx, data, state) {
-        save_needed = true;
-    }
+    let edit_decay_action = draw_edit_decay_window(ctx, state);
 
-    save_needed
+    // カテゴリ削除確認ダイアログ
+    let del_category_action = draw_delete_category_confirm_dialog(ctx, state);
+
+    // スコア削除確認ダイアログ
+    let del_score_action = draw_delete_score_confirm_dialog(ctx, data, state);
+
+    add_category_action
+        .or(edit_decay_action)
+        .or(del_score_action)
+        .or(del_category_action)
 }
 
 fn draw_error_dialog(ctx: &egui::Context, state: &mut UiState) {
@@ -61,15 +56,15 @@ fn draw_error_dialog(ctx: &egui::Context, state: &mut UiState) {
 
 fn draw_delete_score_confirm_dialog(
     ctx: &egui::Context,
-    data: &mut AppData,
+    data: &AppData,
     state: &mut UiState,
-) -> bool {
+) -> Option<Action> {
+    let mut action = None;
+
     let Some(delete_idx) = state.pending_delete_index else {
         // 未選択の場合は即リターン
-        return false;
+        return action;
     };
-
-    let mut save_needed = false;
 
     let mut open = true;
     let mut should_close = false;
@@ -89,7 +84,7 @@ fn draw_delete_score_confirm_dialog(
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .open(&mut open)
         .show(ctx, |ui| {
-            ui.label("この記録を削除しますか？");
+            ui.label("このスコアを削除しますか？");
             ui.label(egui::RichText::new(target_info).strong());
             ui.add_space(10.0);
             ui.horizontal(|ui| {
@@ -103,30 +98,23 @@ fn draw_delete_score_confirm_dialog(
             });
         });
 
-    if confirmed && let Some(cat) = &state.current_category {
-        data.remove_score(cat, delete_idx);
-
-        save_needed = true;
-        state.selected_history_index = None;
+    if confirmed {
+        action = Some(Action::ExecuteDeleteScore(delete_idx));
     }
 
     if !open || should_close {
         state.pending_delete_index = None;
     }
 
-    save_needed
+    action
 }
 
-fn draw_delete_category_confirm_dialog(
-    ctx: &egui::Context,
-    data: &mut AppData,
-    state: &mut UiState,
-) -> bool {
-    let Some(target_name) = &state.pending_delete_category else {
-        return false;
-    };
+fn draw_delete_category_confirm_dialog(ctx: &egui::Context, state: &mut UiState) -> Option<Action> {
+    let mut action = None;
 
-    let mut save_needed = false;
+    let Some(target_name) = &state.pending_delete_category else {
+        return action;
+    };
 
     let mut open = true;
     let mut should_close = false;
@@ -160,29 +148,22 @@ fn draw_delete_category_confirm_dialog(
         });
 
     if confirmed {
-        data.remove_category(target_name);
-
-        // 削除したカテゴリが表示中だった場合、選択を解除する
-        if state.current_category.as_ref() == Some(target_name) {
-            state.current_category = None;
-            state.input_score.clear();
-        }
-        save_needed = true;
+        action = Some(Action::ExecuteDeleteCategory(target_name.clone()));
     }
 
     if !open || should_close {
         state.pending_delete_category = None;
     }
 
-    save_needed
+    action
 }
 
-fn draw_add_category_window(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> bool {
-    if !state.show_add_category_window {
-        return false;
-    }
+fn draw_add_category_window(ctx: &egui::Context, state: &mut UiState) -> Option<Action> {
+    let mut action = None;
 
-    let mut save_needed = false;
+    if !state.show_add_category_window {
+        return action;
+    }
 
     let mut open = true;
     let mut close_requested = false;
@@ -196,12 +177,11 @@ fn draw_add_category_window(ctx: &egui::Context, data: &mut AppData, state: &mut
             ui.text_edit_singleline(&mut state.input_decay);
 
             ui.horizontal(|ui| {
-                if ui.button("追加").clicked() && !state.input_category.is_empty() {
-                    let rate = state.input_decay.parse::<f64>().unwrap_or(0.95);
-                    data.add_category(state.input_category.clone(), rate);
-
-                    save_needed = true;
-                    close_requested = true;
+                if ui.button("追加").clicked() {
+                    action = Some(Action::AddCategory(
+                        state.input_category.clone(),
+                        state.input_decay.clone(),
+                    ));
                 }
 
                 if ui.button("キャンセル").clicked() {
@@ -214,15 +194,15 @@ fn draw_add_category_window(ctx: &egui::Context, data: &mut AppData, state: &mut
         state.show_add_category_window = false;
     }
 
-    save_needed
+    action
 }
 
-fn draw_edit_decay_window(ctx: &egui::Context, data: &mut AppData, state: &mut UiState) -> bool {
-    if !state.show_edit_decay_window {
-        return false;
-    }
+fn draw_edit_decay_window(ctx: &egui::Context, state: &mut UiState) -> Option<Action> {
+    let mut action = None;
 
-    let mut save_needed = false;
+    if !state.show_edit_decay_window {
+        return action;
+    }
 
     let mut open = true;
     let mut close_requested = false;
@@ -238,13 +218,7 @@ fn draw_edit_decay_window(ctx: &egui::Context, data: &mut AppData, state: &mut U
 
             ui.horizontal(|ui| {
                 if ui.button("更新").clicked() {
-                    if let Some(cat) = &state.current_category
-                        && let Ok(rate) = state.input_decay.parse::<f64>()
-                    {
-                        data.update_decay_rate(cat, rate);
-                        save_needed = true;
-                    }
-                    close_requested = true;
+                    action = Some(Action::UpdateDecayRate(state.input_decay.clone()));
                 }
 
                 if ui.button("キャンセル").clicked() {
@@ -257,5 +231,5 @@ fn draw_edit_decay_window(ctx: &egui::Context, data: &mut AppData, state: &mut U
         state.show_edit_decay_window = false;
     }
 
-    save_needed
+    action
 }
