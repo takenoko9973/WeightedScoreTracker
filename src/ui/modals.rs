@@ -7,6 +7,7 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
     draw_error_dialog(ctx, state);
 
     let act_add_cat = draw_add_category_window(ctx, state);
+    let act_remane_cat = draw_rename_category_window(ctx, state);
     let act_add_item = draw_add_item_window(ctx, state);
     let act_edit_decay = draw_edit_decay_window(ctx, state);
     let act_del_cat = draw_delete_category_confirm(ctx, state);
@@ -15,6 +16,7 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
 
     // 結合して返す
     act_add_cat
+        .or(act_remane_cat)
         .or(act_add_item)
         .or(act_edit_decay)
         .or(act_del_cat)
@@ -86,6 +88,51 @@ fn draw_add_category_window(ctx: &egui::Context, state: &mut UiState) -> Option<
 
     if !open || close_requested {
         state.show_add_category_window = false;
+    }
+
+    action
+}
+
+fn draw_rename_category_window(ctx: &egui::Context, state: &mut UiState) -> Option<Action> {
+    if !state.show_rename_category_window {
+        return None;
+    }
+    // 対象が不明なら閉じる
+    let Some(target_cat) = &state.target_category_for_rename else {
+        state.show_rename_category_window = false;
+        return None;
+    };
+
+    let mut action = None;
+    let mut open = true;
+    let mut close_requested = false;
+
+    egui::Window::new("カテゴリ名変更")
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .open(&mut open)
+        .show(ctx, |ui| {
+            ui.label("新しい名前:");
+            ui.text_edit_singleline(&mut state.input_rename_category);
+
+            ui.add_space(10.0);
+
+            ui.horizontal(|ui| {
+                if ui.button("変更").clicked() {
+                    action = Some(Action::RenameCategory(
+                        target_cat.clone(),
+                        state.input_rename_category.clone(),
+                    ));
+                }
+                if ui.button("キャンセル").clicked() {
+                    close_requested = true;
+                }
+            });
+        });
+
+    if !open || close_requested {
+        state.show_rename_category_window = false;
     }
 
     action

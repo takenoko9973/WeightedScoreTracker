@@ -81,6 +81,10 @@ fn draw_single_category(
         });
 
     header_response.header_response.context_menu(|ui| {
+        if ui.button("✏ 名前を変更").clicked() {
+            action = Some(Action::ShowRenameCategoryModal(cat_name.to_string()));
+            ui.close_kind(UiKind::Menu);
+        }
         if ui.button("🗑 このカテゴリを削除").clicked() {
             action = Some(Action::ShowDeleteCategoryConfirm(cat_name.to_string()));
             ui.close_kind(egui::UiKind::Menu);

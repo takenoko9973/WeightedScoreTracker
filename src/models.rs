@@ -43,6 +43,21 @@ impl AppData {
         });
     }
 
+    /// カテゴリ名変更
+    pub fn rename_category(&mut self, old_name: &str, new_name: String) -> bool {
+        // 新しい名前が既に存在する場合は何もしない
+        if self.categories.contains_key(&new_name) {
+            return false;
+        }
+
+        // 古いエントリを取り出して、新しいキーで挿入し直す
+        if let Some(data) = self.categories.remove(old_name) {
+            self.categories.insert(new_name, data);
+            return true;
+        }
+        false
+    }
+
     /// カテゴリを削除
     pub fn remove_category(&mut self, name: &str) {
         self.categories.remove(name);

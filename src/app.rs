@@ -18,6 +18,7 @@ pub struct UiState {
 
     // モーダル表示フラグ
     pub show_add_category_window: bool,
+    pub show_rename_category_window: bool,
     pub show_add_item_window: bool,
     pub show_edit_decay_window: bool,
 
@@ -29,8 +30,9 @@ pub struct UiState {
 
     pub error_message: Option<String>, // エラー用
 
-    // 項目追加時の親カテゴリ一時保存
-    pub target_category_for_new_item: Option<String>,
+    pub input_rename_category: String,
+    pub target_category_for_rename: Option<String>,
+    pub target_category_for_new_item: Option<String>, // 項目追加時の親カテゴリ一時保存
 }
 
 // アプリケーション状態保存
@@ -52,6 +54,7 @@ impl ScoreTracker {
         match action {
             // モーダル表示系
             Action::ShowAddCategoryModal => self.open_add_category_modal(),
+            Action::ShowRenameCategoryModal(now_name) => self.open_rename_category_modal(now_name),
             Action::ShowAddItemModal(cat_name) => self.open_add_item_modal(cat_name),
             Action::ShowEditDecayModal => self.open_edit_decay_modal(),
             Action::ShowDeleteCategoryConfirm(name) => {
@@ -65,6 +68,7 @@ impl ScoreTracker {
             // データ操作系
             Action::SelectItem(cat, item) => self.select_item(cat, item),
             Action::AddCategory(name) => self.add_category(name),
+            Action::RenameCategory(old_name, new_name) => self.rename_category(old_name, new_name),
             Action::AddItem(cat, name, decay) => self.add_item(cat, name, decay),
             Action::AddScore(text) => self.add_score(text),
             Action::UpdateDecayRate(rate) => self.update_decay_rate(rate),
@@ -99,6 +103,12 @@ impl ScoreTracker {
     fn open_add_category_modal(&mut self) {
         self.state.input_category.clear();
         self.state.show_add_category_window = true;
+    }
+
+    fn open_rename_category_modal(&mut self, now_name: String) {
+        self.state.target_category_for_rename = Some(now_name.clone());
+        self.state.input_rename_category = now_name; // 現在の名前を初期値にする
+        self.state.show_rename_category_window = true;
     }
 
     fn open_add_item_modal(&mut self, cat_name: String) {
@@ -143,6 +153,29 @@ impl ScoreTracker {
         self.data.add_category(name);
         self.save_to_file();
         self.state.show_add_category_window = false;
+    }
+
+    /// カテゴリ名変更
+    fn rename_category(&mut self, old_name: String, new_name: String) {
+        if new_name.is_empty() {
+            self.state.error_message = Some("カテゴリ名を入力してください。".to_string());
+            return;
+        }
+        if old_name == new_name {
+            self.state.show_rename_category_window = false;
+            return;
+        }
+
+        if self.data.rename_category(&old_name, new_name.clone()) {
+            // 成功した場合、現在選択中のカテゴリ名も更新する
+            if self.state.current_category.as_ref() == Some(&old_name) {
+                self.state.current_category = Some(new_name);
+            }
+            self.save_to_file();
+            self.state.show_rename_category_window = false;
+        } else {
+            self.state.error_message = Some("その名前は既に使用されています。".to_string());
+        }
     }
 
     /// 項目追加

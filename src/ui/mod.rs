@@ -8,6 +8,7 @@ pub mod side_panel;
 pub enum Action {
     // --- モーダル表示リクエスト ---
     ShowAddCategoryModal,                  // カテゴリ追加
+    ShowRenameCategoryModal(String),       // カテゴリ名変更 (対象カテゴリ名)
     ShowAddItemModal(String),              // 項目追加 (親カテゴリ名)
     ShowEditDecayModal,                    // 減衰率更新
     ShowDeleteCategoryConfirm(String),     // カテゴリ削除 (対象カテゴリ名)
@@ -17,6 +18,7 @@ pub enum Action {
     // --- データ操作リクエスト ---
     SelectItem(String, String),        // 項目選択 (カテゴリ名, 項目名)
     AddCategory(String),               // カテゴリ追加 (名前, 減衰率)
+    RenameCategory(String, String),    // カテゴリ名変更 (旧名, 新名)
     AddItem(String, String, String),   // 項目追加実行 (カテゴリ名, 項目名, 減衰率)
     AddScore(String),                  // スコア追加 (スコア)
     ExecuteDeleteCategory(String),     // カテゴリ削除実行
