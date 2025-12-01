@@ -26,6 +26,7 @@ impl ScoreTracker {
             Action::ShowAddCategoryModal => self.open_add_category_modal(),
             Action::ShowRenameCategoryModal(now_name) => self.open_rename_category_modal(now_name),
             Action::ShowAddItemModal(cat_name) => self.open_add_item_modal(cat_name),
+            Action::ShowEditItemModal(cat, item) => self.open_edit_item_modal(cat, item),
             Action::ShowEditDecayModal => self.open_edit_decay_modal(),
             Action::ShowDeleteCategoryConfirm(name) => {
                 self.state.active_modal = ModalType::ConfirmDeleteCategory { target: name };
@@ -46,6 +47,9 @@ impl ScoreTracker {
             Action::RenameCategory(old_name, new_name) => self.rename_category(old_name, new_name),
             Action::AddItem(cat, name, decay) => self.add_item(cat, name, decay),
             Action::AddScore(text) => self.add_score(text),
+            Action::UpdateItem(old_cat, old_item, new_cat, new_name, decay_str) => {
+                self.update_item(old_cat, old_item, new_cat, new_name, decay_str);
+            }
             Action::UpdateDecayRate(rate) => self.update_decay_rate(rate),
             Action::ExecuteDeleteCategory(name) => self.execute_delete_category(name),
             Action::ExecuteDeleteItem(cat, item) => self.execute_delete_item(cat, item),
@@ -193,6 +197,58 @@ impl ScoreTracker {
             Ok(_) => {
                 self.state.selection.input_score.clear();
                 self.save_to_file();
+            }
+            Err(msg) => self.state.error_message = Some(msg),
+        }
+    }
+
+    /// 項目設定変更
+    fn open_edit_item_modal(&mut self, cat: String, item: String) {
+        if let Some(c_data) = self.data.categories.get(&cat)
+            && let Some(i_data) = c_data.items.get(&item)
+        {
+            self.state.active_modal = ModalType::EditItem {
+                target_cat: cat.clone(),
+                target_item: item.clone(),
+                input_name: item,
+                input_decay: i_data.decay_rate.to_string(),
+                input_cat: cat, // 初期値は現在のカテゴリ
+            };
+        }
+    }
+
+    /// 項目の更新処理
+    fn update_item(
+        &mut self,
+        old_cat: String,
+        old_item: String,
+        new_cat: String,
+        new_name: String,
+        decay_str: String,
+    ) {
+        let rate = match decay_str.parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                self.state.error_message = Some("減衰率は数値を入力してください".to_string());
+                return;
+            }
+        };
+
+        match self
+            .data
+            .try_update_item(&old_cat, &old_item, &new_cat, new_name.clone(), rate)
+        {
+            Ok(_) => {
+                // 選択状態の追従：もし編集していた項目を選択中だったら、選択情報を更新する
+                if self.state.selection.current_category.as_ref() == Some(&old_cat)
+                    && self.state.selection.current_item.as_ref() == Some(&old_item)
+                {
+                    self.state.selection.current_category = Some(new_cat);
+                    self.state.selection.current_item = Some(new_name);
+                }
+
+                self.save_to_file();
+                self.state.active_modal = ModalType::None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }

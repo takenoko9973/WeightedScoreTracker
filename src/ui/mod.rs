@@ -12,6 +12,7 @@ pub enum Action {
     ShowAddCategoryModal,                  // カテゴリ追加
     ShowRenameCategoryModal(String),       // カテゴリ名変更 (対象カテゴリ名)
     ShowAddItemModal(String),              // 項目追加 (親カテゴリ名)
+    ShowEditItemModal(String, String),     // 項目編集 (カテゴリ名, 項目名)
     ShowEditDecayModal,                    // 減衰率更新
     ShowDeleteCategoryConfirm(String),     // カテゴリ削除 (対象カテゴリ名)
     ShowDeleteItemConfirm(String, String), // 項目削除 (カテゴリ名, 項目名)
@@ -26,5 +27,6 @@ pub enum Action {
     ExecuteDeleteCategory(String),     // カテゴリ削除実行
     ExecuteDeleteItem(String, String), // 項目削除
     ExecuteDeleteScore(usize),         // スコア削除実行
+    UpdateItem(String, String, String, String, String), // 項目更新
     UpdateDecayRate(String),           // 減衰率更新 (文字列)
 }

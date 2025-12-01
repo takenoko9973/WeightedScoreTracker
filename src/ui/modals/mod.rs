@@ -48,6 +48,25 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
             );
         }
 
+        ModalType::EditItem {
+            target_cat,
+            target_item,
+            input_name,
+            input_decay,
+            input_cat,
+        } => {
+            action = item::show_edit(
+                ctx,
+                data,
+                target_cat,
+                target_item,
+                input_name,
+                input_decay,
+                input_cat,
+                &mut should_close,
+            );
+        }
+
         ModalType::EditDecay { input_decay } => {
             if let (Some(cat), Some(item_name)) = (
                 &state.selection.current_category,

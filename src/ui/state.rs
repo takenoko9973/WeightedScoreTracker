@@ -39,6 +39,14 @@ pub enum ModalType {
         input_name: String,
         input_decay: String,
     },
+    // 項目編集
+    EditItem {
+        target_cat: String,  // 元のカテゴリ
+        target_item: String, // 元の項目名
+        input_name: String,  // 名前入力用
+        input_decay: String, // 減衰率入力用
+        input_cat: String,   // カテゴリ選択用（移動先）
+    },
     // 減衰率変更画面の状態
     EditDecay {
         input_decay: String,

@@ -116,6 +116,15 @@ fn draw_single_item(
 
     // 右クリック: 削除メニュー
     response.context_menu(|ui| {
+        // 編集メニュー (一括変更)
+        if ui.button("✏ 項目を編集...").clicked() {
+            action = Some(Action::ShowEditItemModal(
+                cat_name.to_string(),
+                item_name.to_string(),
+            ));
+            ui.close_kind(egui::UiKind::Menu);
+        }
+
         if ui.button("🗑 この項目を削除").clicked() {
             action = Some(Action::ShowDeleteItemConfirm(
                 cat_name.to_string(),

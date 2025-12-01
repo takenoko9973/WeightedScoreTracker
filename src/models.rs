@@ -126,6 +126,73 @@ impl AppData {
         Ok(())
     }
 
+    /// 項目の情報を一括更新（移動、リネーム、減衰率変更）
+    pub fn try_update_item(
+        &mut self,
+        old_cat_name: &str,
+        old_item_name: &str,
+        new_cat_name: &str,
+        new_item_name: String,
+        new_decay: f64,
+    ) -> Result<(), String> {
+        // バリデーション
+        validate_decay_rate_range(new_decay)?;
+        if new_item_name.trim().is_empty() {
+            return Err("項目名を入力してください。".to_string());
+        }
+
+        // 1. 移動・変更がない場合は何もしない
+        if old_cat_name == new_cat_name
+            && old_item_name == new_item_name
+            && self
+                .categories
+                .get(old_cat_name)
+                .and_then(|c| c.items.get(old_item_name))
+                .map(|i| i.decay_rate)
+                == Some(new_decay)
+        {
+            return Ok(());
+        }
+
+        // 2. 移動先のカテゴリが存在するか確認
+        if !self.categories.contains_key(new_cat_name) {
+            return Err("移動先のカテゴリが存在しません。".to_string());
+        }
+
+        // 3. 名前変更または移動が発生する場合、移動先での名前重複チェック
+        let name_changed_or_moved = old_cat_name != new_cat_name || old_item_name != new_item_name;
+        if name_changed_or_moved
+            && let Some(dest_cat) = self.categories.get(new_cat_name)
+            && dest_cat.items.contains_key(&new_item_name)
+        {
+            return Err(format!(
+                "カテゴリ「{}」内に項目「{}」は既に存在します。",
+                new_cat_name, new_item_name
+            ));
+        }
+
+        // 4. データを取り出す（元データ削除）
+        let mut item_data = if let Some(src_cat) = self.categories.get_mut(old_cat_name) {
+            src_cat
+                .items
+                .remove(old_item_name)
+                .ok_or("編集対象の項目が見つかりません。".to_string())?
+        } else {
+            return Err("元のカテゴリが見つかりません。".to_string());
+        };
+
+        // 5. データを更新して新しい場所に挿入
+        item_data.decay_rate = new_decay;
+
+        if let Some(dest_cat) = self.categories.get_mut(new_cat_name) {
+            dest_cat.items.insert(new_item_name, item_data);
+            Ok(())
+        } else {
+            // 万が一削除後に挿入先が消えていた場合の救済（通常ありえない）
+            Err("移動先のカテゴリへの保存に失敗しました。".to_string())
+        }
+    }
+
     /// 指定したカテゴリの中の項目を削除
     pub fn try_remove_item(&mut self, category_name: &str, item_name: &str) -> Result<(), String> {
         let Some(cat) = self.categories.get_mut(category_name) else {
