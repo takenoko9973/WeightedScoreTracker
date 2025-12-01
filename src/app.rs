@@ -6,33 +6,60 @@ use eframe::egui;
 
 #[derive(Default)]
 pub struct UiState {
-    // 選択状態
+    /// 常駐する画面の選択状態や入力欄
+    pub selection: SelectionState,
+
+    /// 現在開いているモーダル
+    pub active_modal: ModalType,
+
+    /// エラーメッセージ（グローバル）
+    pub error_message: Option<String>,
+}
+
+/// メイン画面での選択・入力状態
+#[derive(Default)]
+pub struct SelectionState {
     pub current_category: Option<String>,
     pub current_item: Option<String>,
-
-    // 入力バッファ
-    pub input_category: String, // カテゴリ名用
-    pub input_item: String,     // 項目名用
+    pub selected_history_index: Option<usize>,
     pub input_score: String,
-    pub input_decay: String,
+}
 
-    // モーダル表示フラグ
-    pub show_add_category_window: bool,
-    pub show_rename_category_window: bool,
-    pub show_add_item_window: bool,
-    pub show_edit_decay_window: bool,
-
-    // 削除確認・選択用
-    pub selected_history_index: Option<usize>, // グラフバーのクリック挙動
-    pub pending_delete_category: Option<String>, // カテゴリ削除
-    pub pending_delete_item: Option<(String, String)>, // 項目削除確認
-    pub pending_delete_score: Option<usize>,   // スコア削除確認
-
-    pub error_message: Option<String>, // エラー用
-
-    pub input_rename_category: String,
-    pub target_category_for_rename: Option<String>,
-    pub target_category_for_new_item: Option<String>, // 項目追加時の親カテゴリ一時保存
+//・ モーダルの定義
+#[derive(Default)]
+pub enum ModalType {
+    #[default]
+    None,
+    // カテゴリ追加画面の状態
+    AddCategory {
+        input_name: String,
+    },
+    // カテゴリ名変更画面の状態
+    RenameCategory {
+        target: String,
+        input_new_name: String,
+    },
+    // 項目追加画面の状態
+    AddItem {
+        target_category: String,
+        input_name: String,
+        input_decay: String,
+    },
+    // 減衰率変更画面の状態
+    EditDecay {
+        input_decay: String,
+    },
+    // 削除確認ダイアログ
+    ConfirmDeleteCategory {
+        target: String,
+    },
+    ConfirmDeleteItem {
+        target_cat: String,
+        target_item: String,
+    },
+    ConfirmDeleteScore {
+        index: usize,
+    },
 }
 
 // アプリケーション状態保存
@@ -58,12 +85,17 @@ impl ScoreTracker {
             Action::ShowAddItemModal(cat_name) => self.open_add_item_modal(cat_name),
             Action::ShowEditDecayModal => self.open_edit_decay_modal(),
             Action::ShowDeleteCategoryConfirm(name) => {
-                self.state.pending_delete_category = Some(name)
+                self.state.active_modal = ModalType::ConfirmDeleteCategory { target: name };
             }
             Action::ShowDeleteItemConfirm(cat, item) => {
-                self.state.pending_delete_item = Some((cat, item))
+                self.state.active_modal = ModalType::ConfirmDeleteItem {
+                    target_cat: cat,
+                    target_item: item,
+                };
             }
-            Action::ShowDeleteScoreConfirm(idx) => self.state.pending_delete_score = Some(idx),
+            Action::ShowDeleteScoreConfirm(idx) => {
+                self.state.active_modal = ModalType::ConfirmDeleteScore { index: idx }
+            }
 
             // データ操作系
             Action::SelectItem(cat, item) => self.select_item(cat, item),
@@ -93,31 +125,41 @@ impl ScoreTracker {
 
     /// カテゴリ登録
     fn open_add_category_modal(&mut self) {
-        self.state.input_category.clear();
-        self.state.show_add_category_window = true;
+        self.state.active_modal = ModalType::AddCategory {
+            input_name: String::new(),
+        };
     }
 
-    fn open_rename_category_modal(&mut self, now_name: String) {
-        self.state.target_category_for_rename = Some(now_name.clone());
-        self.state.input_rename_category = now_name; // 現在の名前を初期値にする
-        self.state.show_rename_category_window = true;
+    fn open_rename_category_modal(&mut self, target_cat: String) {
+        self.state.active_modal = ModalType::RenameCategory {
+            input_new_name: target_cat.clone(), // 初期値は現在の名前
+            target: target_cat.clone(),
+        };
     }
 
     fn open_add_item_modal(&mut self, cat_name: String) {
-        self.state.target_category_for_new_item = Some(cat_name);
-        self.state.input_item.clear();
-        self.state.input_decay = DEFAULT_DECAY_RATE.to_string();
-        self.state.show_add_item_window = true;
+        self.state.active_modal = ModalType::AddItem {
+            target_category: cat_name,
+            input_name: String::new(),
+            input_decay: DEFAULT_DECAY_RATE.to_string(),
+        };
     }
 
     /// 減衰率変更
     fn open_edit_decay_modal(&mut self) {
-        if let (Some(c), Some(i)) = (&self.state.current_category, &self.state.current_item)
-            && let Some(cat) = self.data.categories.get(c)
+        let (Some(c), Some(i)) = (
+            &self.state.selection.current_category,
+            &self.state.selection.current_item,
+        ) else {
+            return;
+        };
+
+        if let Some(cat) = self.data.categories.get(c)
             && let Some(item) = cat.items.get(i)
         {
-            self.state.input_decay = item.decay_rate.to_string();
-            self.state.show_edit_decay_window = true;
+            self.state.active_modal = ModalType::EditDecay {
+                input_decay: item.decay_rate.to_string(),
+            };
         }
     }
 
@@ -127,12 +169,12 @@ impl ScoreTracker {
 
     /// 項目選択
     fn select_item(&mut self, cat: String, item: String) {
-        self.state.current_category = Some(cat);
-        self.state.current_item = Some(item);
+        self.state.selection.current_category = Some(cat);
+        self.state.selection.current_item = Some(item);
 
         // カテゴリが変わったら入力欄と選択状態をリセット
-        self.state.input_score.clear();
-        self.state.selected_history_index = None;
+        self.state.selection.input_score.clear();
+        self.state.selection.selected_history_index = None;
     }
 
     /// カテゴリ登録
@@ -140,7 +182,7 @@ impl ScoreTracker {
         match self.data.try_add_category(name) {
             Ok(_) => {
                 self.save_to_file();
-                self.state.show_add_category_window = false;
+                self.state.active_modal = ModalType::None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -149,18 +191,17 @@ impl ScoreTracker {
     /// カテゴリ名変更
     fn rename_category(&mut self, old_name: String, new_name: String) {
         if old_name == new_name {
-            self.state.show_rename_category_window = false;
+            self.state.active_modal = ModalType::None;
             return;
         }
 
         match self.data.try_rename_category(&old_name, new_name.clone()) {
             Ok(_) => {
-                // 選択中のカテゴリ名も追従して更新
-                if self.state.current_category.as_ref() == Some(&old_name) {
-                    self.state.current_category = Some(new_name);
+                if self.state.selection.current_category.as_ref() == Some(&old_name) {
+                    self.state.selection.current_category = Some(new_name);
                 }
                 self.save_to_file();
-                self.state.show_rename_category_window = false;
+                self.state.active_modal = ModalType::None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -181,7 +222,7 @@ impl ScoreTracker {
         match self.data.try_add_item(&cat_name, name, decay_rate) {
             Ok(_) => {
                 self.save_to_file();
-                self.state.show_add_item_window = false;
+                self.state.active_modal = ModalType::None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -189,8 +230,10 @@ impl ScoreTracker {
 
     /// スコア追加
     fn add_score(&mut self, text: String) {
-        let (Some(cat), Some(item)) = (&self.state.current_category, &self.state.current_item)
-        else {
+        let (Some(cat), Some(item)) = (
+            &self.state.selection.current_category,
+            &self.state.selection.current_item,
+        ) else {
             return;
         };
 
@@ -205,7 +248,7 @@ impl ScoreTracker {
         // 追加処理（マイナスチェックなどはモデル内で実行）
         match self.data.try_add_score(cat, item, score) {
             Ok(_) => {
-                self.state.input_score.clear();
+                self.state.selection.input_score.clear();
                 self.save_to_file();
             }
             Err(msg) => self.state.error_message = Some(msg),
@@ -214,8 +257,10 @@ impl ScoreTracker {
 
     /// 減衰率変更
     fn update_decay_rate(&mut self, rate_str: String) {
-        let (Some(cat), Some(item)) = (&self.state.current_category, &self.state.current_item)
-        else {
+        let (Some(cat), Some(item)) = (
+            &self.state.selection.current_category,
+            &self.state.selection.current_item,
+        ) else {
             return;
         };
 
@@ -230,7 +275,7 @@ impl ScoreTracker {
         match self.data.try_update_decay_rate(cat, item, rate) {
             Ok(_) => {
                 self.save_to_file();
-                self.state.show_edit_decay_window = false; // ウィンドウ非表示処理
+                self.state.active_modal = ModalType::None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -241,56 +286,57 @@ impl ScoreTracker {
         // モデルの処理を呼び出し、結果で分岐
         match self.data.try_remove_category(&name) {
             Ok(_) => {
-                if self.state.current_category.as_ref() == Some(&name) {
-                    self.state.current_category = None;
-                    self.state.current_item = None;
-                    self.state.selected_history_index = None;
+                if self.state.selection.current_category.as_ref() == Some(&name) {
+                    self.state.selection.current_category = None;
+                    self.state.selection.current_item = None;
                 }
                 self.save_to_file();
+                self.state.active_modal = ModalType::None;
             }
             Err(msg) => {
                 self.state.error_message = Some(msg);
             }
         }
-        self.state.pending_delete_category = None;
     }
 
     /// 項目削除
     fn execute_delete_item(&mut self, cat: String, item: String) {
         match self.data.try_remove_item(&cat, &item) {
             Ok(_) => {
-                if self.state.current_category.as_ref() == Some(&cat)
-                    && self.state.current_item.as_ref() == Some(&item)
+                if self.state.selection.current_category.as_ref() == Some(&cat)
+                    && self.state.selection.current_item.as_ref() == Some(&item)
                 {
-                    self.state.current_item = None;
-                    self.state.selected_history_index = None;
+                    self.state.selection.current_item = None;
+                    self.state.selection.selected_history_index = None;
                 }
                 self.save_to_file();
+                self.state.active_modal = ModalType::None;
             }
             Err(msg) => {
                 self.state.error_message = Some(msg);
             }
         }
-        self.state.pending_delete_item = None;
     }
 
     /// スコア削除
     fn execute_delete_score(&mut self, idx: usize) {
-        let (Some(cat), Some(item)) = (&self.state.current_category, &self.state.current_item)
-        else {
+        let (Some(cat), Some(item)) = (
+            &self.state.selection.current_category,
+            &self.state.selection.current_item,
+        ) else {
             return;
         };
 
         match self.data.try_remove_score(cat, item, idx) {
             Ok(_) => {
-                self.state.selected_history_index = None;
+                self.state.selection.selected_history_index = None;
                 self.save_to_file();
+                self.state.active_modal = ModalType::None;
             }
             Err(msg) => {
                 self.state.error_message = Some(msg);
             }
         }
-        self.state.pending_delete_score = None;
     }
 }
 

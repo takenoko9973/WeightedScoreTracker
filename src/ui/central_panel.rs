@@ -11,8 +11,10 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
     egui::CentralPanel::default()
         .show(ctx, |ui| {
             // カテゴリ未選択
-            let (Some(cat_name), Some(item_name)) = (&state.current_category, &state.current_item)
-            else {
+            let (Some(cat_name), Some(item_name)) = (
+                &state.selection.current_category,
+                &state.selection.current_item,
+            ) else {
                 ui.centered_and_justified(|ui| {
                     ui.label("左のリストから項目を選択するか、追加してください");
                 });
@@ -101,7 +103,7 @@ fn draw_graph(ui: &mut egui::Ui, item_data: &ItemData, state: &mut UiState) {
                 .width(width)
                 .name(format!("{}回目", i + 1));
 
-            let is_selected = state.selected_history_index == Some(i);
+            let is_selected = state.selection.selected_history_index == Some(i);
             let fill_color = if is_selected {
                 base_color // 選択時は濃く
             } else {
@@ -174,9 +176,9 @@ fn draw_graph(ui: &mut egui::Ui, item_data: &ItemData, state: &mut UiState) {
     // InnerResponse経由でクリック結果を受け取る
     if let Some(idx) = plot_response.inner {
         if idx == usize::MAX {
-            state.selected_history_index = None;
+            state.selection.selected_history_index = None;
         } else {
-            state.selected_history_index = Some(idx);
+            state.selection.selected_history_index = Some(idx);
         }
     }
 }
@@ -193,13 +195,14 @@ fn draw_input_section(ui: &mut egui::Ui, state: &mut UiState) -> Option<Action> 
 
             // 入力欄
             let response = ui.add(
-                egui::TextEdit::singleline(&mut state.input_score).desired_width(f32::INFINITY),
+                egui::TextEdit::singleline(&mut state.selection.input_score)
+                    .desired_width(f32::INFINITY),
             );
             // 入力欄でのenter入力
             let is_enter = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
             if is_enter || is_clicked {
-                action = Some(Action::AddScore(state.input_score.clone()));
+                action = Some(Action::AddScore(state.selection.input_score.clone()));
                 if is_enter {
                     response.request_focus();
                 }
@@ -262,12 +265,12 @@ fn draw_history_row(
         let label_text = format!("[{}] {}回目: {}", time_str, original_idx + 1, entry.score);
 
         // 選択可能ラベルの描画
-        let is_selected = state.selected_history_index == Some(original_idx);
+        let is_selected = state.selection.selected_history_index == Some(original_idx);
         let response = ui.selectable_label(is_selected, label_text);
 
         // クリック時の処理 (State更新)
         if response.clicked() {
-            state.selected_history_index = Some(original_idx);
+            state.selection.selected_history_index = Some(original_idx);
         }
 
         // 自動スクロール

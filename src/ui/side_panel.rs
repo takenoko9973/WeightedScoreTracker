@@ -135,8 +135,8 @@ fn draw_single_item(
 ) -> Option<Action> {
     let mut action = None;
 
-    let is_selected = state.current_category.as_deref() == Some(cat_name)
-        && state.current_item.as_deref() == Some(item_name);
+    let is_selected = state.selection.current_category.as_deref() == Some(cat_name)
+        && state.selection.current_item.as_deref() == Some(item_name);
 
     let response = ui.selectable_label(is_selected, item_name);
 
