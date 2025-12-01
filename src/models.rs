@@ -29,8 +29,10 @@ pub struct ItemData {
     pub scores: Vec<ScoreEntry>,
     pub decay_rate: f64,
 
-    #[serde(default = "default_created_at")] // 未設定の場合、現在時刻で埋める
-    pub created_at: DateTime<Utc>,
+    // 古いJSONファイルの "created_at" も読み込む
+    #[serde(alias = "created_at", default = "default_created_at")]
+    // 未設定の場合、現在時刻で埋める
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -120,7 +122,7 @@ impl AppData {
             ItemData {
                 scores: Vec::new(),
                 decay_rate,
-                created_at: Utc::now(),
+                updated_at: Utc::now(),
             },
         );
         Ok(())
@@ -224,6 +226,7 @@ impl AppData {
                     score,
                     timestamp: Utc::now(),
                 });
+                item.updated_at = Utc::now();
             })
             .ok_or_else(|| "カテゴリまたは項目が見つかりません。".to_string())
     }

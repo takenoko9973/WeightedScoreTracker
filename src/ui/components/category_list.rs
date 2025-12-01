@@ -71,7 +71,7 @@ fn draw_category_contents(
 
     // 項目を日付順にソート
     let mut items: Vec<_> = cat_data.items.iter().collect();
-    items.sort_by(|a, b| b.1.created_at.cmp(&a.1.created_at));
+    items.sort_by(|a, b| b.1.updated_at.cmp(&a.1.updated_at));
 
     // 各項目を描画
     items
