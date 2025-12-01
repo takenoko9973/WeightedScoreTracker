@@ -1,5 +1,5 @@
 {
-    "name": "score-tracker_rust",
+    "name": "weighted-score-tracker_rust",
     "dockerFile": "./Dockerfile",
     "init": true,
     "customizations": {
@@ -31,7 +31,7 @@
     },
     "mounts": [
         {
-            "source": "rust-target",
+            "source": "weighted-score-tracker_rust-target",
             "target": "${containerWorkspaceFolder}/target",
             "type": "volume"
         },
