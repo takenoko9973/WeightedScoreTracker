@@ -2,6 +2,7 @@ pub mod central_panel;
 pub mod fonts;
 pub mod modals;
 pub mod side_panel;
+pub mod state;
 
 /// アプリケーション内で発生する操作
 #[derive(Debug, Clone)]

@@ -1,6 +1,6 @@
-use crate::models::AppData;
+use crate::models::CategoryData;
 use crate::ui::Action;
-use crate::{app::UiState, models::CategoryData};
+use crate::{models::AppData, ui::state::UiState};
 use eframe::egui::{self, UiKind};
 
 /// サイドパネル描画のエントリーポイント

@@ -1,9 +1,9 @@
 use std::iter::zip;
 
-use crate::app::UiState;
 use crate::logic::{calculate_plot_params, calculate_stats};
 use crate::models::{AppData, ItemData, ScoreEntry};
 use crate::ui::Action;
+use crate::ui::state::UiState;
 use eframe::egui::{self};
 use egui_plot::{Bar, BarChart, Corner, Legend, Plot};
 

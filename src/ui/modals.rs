@@ -1,6 +1,6 @@
-use crate::app::{ModalType, SelectionState, UiState};
 use crate::models::{AppData, MAX_DECAY_RATE, MIN_DECAY_RATE};
 use crate::ui::Action;
+use crate::ui::state::{ModalType, SelectionState, UiState};
 use eframe::egui;
 
 pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<Action> {
