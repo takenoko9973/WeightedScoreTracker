@@ -1,4 +1,4 @@
-use crate::models::AppData;
+use crate::models::{AppData, DEFAULT_DECAY_RATE};
 use crate::persistence::{load_data, save_data};
 use crate::ui::Action;
 use crate::ui::{central_panel, modals, side_panel};
@@ -87,14 +87,6 @@ impl ScoreTracker {
         }
     }
 
-    fn validate_decay_rate(&self, rate_str: &str) -> Result<f64, String> {
-        match rate_str.parse::<f64>() {
-            Ok(decay_rate) if 0.0 < decay_rate && decay_rate <= 1.0 => Ok(decay_rate),
-            Ok(_) => Err("減衰率は 0 より大きく、1 以下の数値を入力してください。".to_string()),
-            Err(_) => Err("有効な数値を入力してください。".to_string()),
-        }
-    }
-
     // ======================================
     // モーダル表示
     // ======================================
@@ -114,7 +106,7 @@ impl ScoreTracker {
     fn open_add_item_modal(&mut self, cat_name: String) {
         self.state.target_category_for_new_item = Some(cat_name);
         self.state.input_item.clear();
-        self.state.input_decay = "0.95".to_string();
+        self.state.input_decay = DEFAULT_DECAY_RATE.to_string();
         self.state.show_add_item_window = true;
     }
 
@@ -145,51 +137,51 @@ impl ScoreTracker {
 
     /// カテゴリ登録
     fn add_category(&mut self, name: String) {
-        if name.is_empty() {
-            self.state.error_message = Some("カテゴリ名を入力してください。".to_string());
-            return;
+        match self.data.try_add_category(name) {
+            Ok(_) => {
+                self.save_to_file();
+                self.state.show_add_category_window = false;
+            }
+            Err(msg) => self.state.error_message = Some(msg),
         }
-
-        self.data.add_category(name);
-        self.save_to_file();
-        self.state.show_add_category_window = false;
     }
 
     /// カテゴリ名変更
     fn rename_category(&mut self, old_name: String, new_name: String) {
-        if new_name.is_empty() {
-            self.state.error_message = Some("カテゴリ名を入力してください。".to_string());
-            return;
-        }
         if old_name == new_name {
             self.state.show_rename_category_window = false;
             return;
         }
 
-        if self.data.rename_category(&old_name, new_name.clone()) {
-            // 成功した場合、現在選択中のカテゴリ名も更新する
-            if self.state.current_category.as_ref() == Some(&old_name) {
-                self.state.current_category = Some(new_name);
+        match self.data.try_rename_category(&old_name, new_name.clone()) {
+            Ok(_) => {
+                // 選択中のカテゴリ名も追従して更新
+                if self.state.current_category.as_ref() == Some(&old_name) {
+                    self.state.current_category = Some(new_name);
+                }
+                self.save_to_file();
+                self.state.show_rename_category_window = false;
             }
-            self.save_to_file();
-            self.state.show_rename_category_window = false;
-        } else {
-            self.state.error_message = Some("その名前は既に使用されています。".to_string());
+            Err(msg) => self.state.error_message = Some(msg),
         }
     }
 
     /// 項目追加
     fn add_item(&mut self, cat_name: String, name: String, decay_str: String) {
-        if name.is_empty() {
-            self.state.error_message = Some("項目名を入力してください。".to_string());
-            return;
-        }
+        // UI層で変換を行う
+        let decay_rate = match decay_str.parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                self.state.error_message =
+                    Some("減衰率には有効な数値を入力してください。".to_string());
+                return;
+            }
+        };
 
-        match self.validate_decay_rate(&decay_str) {
-            Ok(rate) => {
-                self.data.add_item(&cat_name, name, rate);
+        match self.data.try_add_item(&cat_name, name, decay_rate) {
+            Ok(_) => {
                 self.save_to_file();
-                self.state.show_add_category_window = false;
+                self.state.show_add_item_window = false;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -202,19 +194,21 @@ impl ScoreTracker {
             return;
         };
 
-        match text.parse::<i32>() {
-            Ok(score) if score >= 0 => {
-                self.data.add_score(cat, item, score);
+        let score = match text.parse::<i32>() {
+            Ok(v) => v,
+            Err(_) => {
+                self.state.error_message = Some("スコアには整数値を入力してください。".to_string());
+                return;
+            }
+        };
+
+        // 追加処理（マイナスチェックなどはモデル内で実行）
+        match self.data.try_add_score(cat, item, score) {
+            Ok(_) => {
                 self.state.input_score.clear();
                 self.save_to_file();
             }
-            Ok(_) => {
-                self.state.error_message =
-                    Some("スコアにマイナスの値は入力できません。".to_string());
-            }
-            Err(_) => {
-                self.state.error_message = Some("有効な整数値を入力してください。".to_string());
-            }
+            Err(msg) => self.state.error_message = Some(msg),
         }
     }
 
@@ -225,9 +219,16 @@ impl ScoreTracker {
             return;
         };
 
-        match self.validate_decay_rate(&rate_str) {
-            Ok(rate) => {
-                self.data.update_decay_rate(cat, item, rate);
+        let rate = match rate_str.parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => {
+                self.state.error_message = Some("有効な数値を入力してください。".to_string());
+                return;
+            }
+        };
+
+        match self.data.try_update_decay_rate(cat, item, rate) {
+            Ok(_) => {
                 self.save_to_file();
                 self.state.show_edit_decay_window = false; // ウィンドウ非表示処理
             }
@@ -235,25 +236,42 @@ impl ScoreTracker {
         }
     }
 
+    /// カテゴリ削除実行
     fn execute_delete_category(&mut self, name: String) {
-        self.data.remove_category(&name);
-        // 選択中のカテゴリが消えたらリセット
-        if self.state.current_category.as_ref() == Some(&name) {
-            self.state.current_category = None;
-            self.state.current_item = None;
+        // モデルの処理を呼び出し、結果で分岐
+        match self.data.try_remove_category(&name) {
+            Ok(_) => {
+                if self.state.current_category.as_ref() == Some(&name) {
+                    self.state.current_category = None;
+                    self.state.current_item = None;
+                    self.state.selected_history_index = None;
+                }
+                self.save_to_file();
+            }
+            Err(msg) => {
+                self.state.error_message = Some(msg);
+            }
         }
-
-        self.save_to_file();
+        self.state.pending_delete_category = None;
     }
 
     /// 項目削除
     fn execute_delete_item(&mut self, cat: String, item: String) {
-        self.data.remove_item(&cat, &item);
-        if self.state.current_item.as_ref() == Some(&item) {
-            self.state.current_item = None;
+        match self.data.try_remove_item(&cat, &item) {
+            Ok(_) => {
+                if self.state.current_category.as_ref() == Some(&cat)
+                    && self.state.current_item.as_ref() == Some(&item)
+                {
+                    self.state.current_item = None;
+                    self.state.selected_history_index = None;
+                }
+                self.save_to_file();
+            }
+            Err(msg) => {
+                self.state.error_message = Some(msg);
+            }
         }
-
-        self.save_to_file();
+        self.state.pending_delete_item = None;
     }
 
     /// スコア削除
@@ -263,9 +281,16 @@ impl ScoreTracker {
             return;
         };
 
-        self.data.remove_score(cat, item, idx);
-        self.state.selected_history_index = None;
-        self.save_to_file();
+        match self.data.try_remove_score(cat, item, idx) {
+            Ok(_) => {
+                self.state.selected_history_index = None;
+                self.save_to_file();
+            }
+            Err(msg) => {
+                self.state.error_message = Some(msg);
+            }
+        }
+        self.state.pending_delete_score = None;
     }
 }
 
