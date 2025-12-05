@@ -1,4 +1,5 @@
-use crate::models::{AppData, DEFAULT_DECAY_RATE};
+use crate::constants::DEFAULT_DECAY_RATE;
+use crate::models::AppData;
 use crate::persistence::{load_data, save_data};
 use crate::ui::Action;
 use crate::ui::state::{ModalType, UiState};

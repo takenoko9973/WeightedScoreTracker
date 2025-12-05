@@ -1,8 +1,7 @@
+use crate::constants::DATA_FILENAME;
 use crate::models::AppData;
 use std::fs;
 use std::path::Path;
-
-const DATA_FILENAME: &str = "scores_data.json";
 
 pub fn load_data() -> Option<AppData> {
     if Path::new(DATA_FILENAME).exists() {

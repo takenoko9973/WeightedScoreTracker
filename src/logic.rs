@@ -1,4 +1,4 @@
-use crate::{models::ScoreEntry, utils};
+use crate::{constants::PLOT_WEIGHT_THRESHOLD, models::ScoreEntry, utils};
 
 fn generate_weight(decay_rate: f64, n: usize) -> Vec<f64> {
     (0..n)
@@ -28,9 +28,8 @@ pub struct PlotParams {
 
 /// 重みに基づいて、グラフの適切な表示範囲（底と天井）を計算する
 pub fn calculate_plot_params(scores: &[ScoreEntry], weights: &[f64]) -> PlotParams {
-    let weight_threshold = 0.1;
-
     // 重みが一定以上のスコアだけを抽出（なければ全データ）
+    let weight_threshold = PLOT_WEIGHT_THRESHOLD;
     let relevant_scores = Some(
         scores
             .iter()

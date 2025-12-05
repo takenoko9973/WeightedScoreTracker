@@ -1,4 +1,5 @@
-use crate::models::{AppData, MAX_DECAY_RATE, MIN_DECAY_RATE};
+use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
+use crate::models::AppData;
 use crate::ui::Action;
 use eframe::egui;
 
