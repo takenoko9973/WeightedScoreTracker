@@ -1,10 +1,7 @@
+use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-pub const MIN_DECAY_RATE: f64 = 0.01;
-pub const MAX_DECAY_RATE: f64 = 1.00;
-pub const DEFAULT_DECAY_RATE: f64 = 0.90;
 
 // バリデーションヘルパー関数（再利用のため）
 pub fn validate_decay_rate_range(rate: f64) -> Result<(), String> {
@@ -20,7 +17,7 @@ pub fn validate_decay_rate_range(rate: f64) -> Result<(), String> {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ScoreEntry {
-    pub score: i32,
+    pub score: i64,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -212,7 +209,7 @@ impl AppData {
         &mut self,
         category_name: &str,
         item_name: &str,
-        score: i32,
+        score: i64,
     ) -> Result<(), String> {
         if score < 0 {
             return Err("スコアにマイナスの値は入力できません。".to_string());

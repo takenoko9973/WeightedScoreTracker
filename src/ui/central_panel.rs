@@ -57,7 +57,7 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
 
 /// ヘッダー（統計情報と設定ボタン）の描画
 fn draw_header(ui: &mut egui::Ui, item_data: &ItemData) -> Option<Action> {
-    let (avg, count, _) = calculate_stats(&item_data.scores, item_data.decay_rate);
+    let (avg, std, count, _) = calculate_stats(&item_data.scores, item_data.decay_rate);
     let mut action = None;
 
     ui.horizontal(|ui| {
@@ -66,6 +66,7 @@ fn draw_header(ui: &mut egui::Ui, item_data: &ItemData) -> Option<Action> {
                 .size(16.0)
                 .strong(),
         );
+        ui.label(format!("(加重標準偏差: {:.2})", std));
         ui.label(format!("(データ数: {})", count));
 
         // 右寄せ配置 (右から左に順番に設置)

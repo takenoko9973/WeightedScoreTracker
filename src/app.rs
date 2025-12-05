@@ -1,4 +1,5 @@
-use crate::models::{AppData, DEFAULT_DECAY_RATE};
+use crate::constants::DEFAULT_DECAY_RATE;
+use crate::models::AppData;
 use crate::persistence::{load_data, save_data};
 use crate::ui::Action;
 use crate::ui::state::{ModalType, UiState};
@@ -184,7 +185,7 @@ impl ScoreTracker {
             return;
         };
 
-        let score = match text.parse::<i32>() {
+        let score = match text.parse::<i64>() {
             Ok(v) => v,
             Err(_) => {
                 self.state.error_message = Some("スコアには整数値を入力してください。".to_string());
