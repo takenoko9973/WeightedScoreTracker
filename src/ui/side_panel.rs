@@ -11,40 +11,32 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
     egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(ctx, |ui| {
-            ui.heading("カテゴリ一覧");
-
-            ui.separator();
+            // 上下に要素を先に配置
+            egui::TopBottomPanel::top("header_panel").show_inside(ui, |ui| {
+                ui.heading("カテゴリ一覧");
+            });
+            egui::TopBottomPanel::bottom("footer_panel").show_inside(ui, |ui| {
+                if let Some(a) = draw_footer(ui) {
+                    action = Some(a);
+                }
+            });
 
             // メインのリストエリア
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                // フッターエリア
-                if let Some(act) = draw_footer(ui) {
-                    action = Some(act);
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                if let Some(a) = category_list::show(ui, data, &state.selection) {
+                    action = Some(a);
                 }
-
-                ui.separator();
-
-                ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), ui.available_height()),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        if let Some(act) = category_list::show(ui, data, &state.selection) {
-                            action = Some(act);
-                        }
-                    },
-                );
             });
         });
 
     action
 }
 
-/// フッター（カテゴリ追加ボタン）の描画
+/// フッター描画
 fn draw_footer(ui: &mut egui::Ui) -> Option<Action> {
-    // 逆順で登録
     let mut action = None;
 
-    ui.add_space(5.0);
+    ui.add_space(3.0);
 
     let btn_size = egui::vec2(ui.available_width(), 30.0);
     if ui
