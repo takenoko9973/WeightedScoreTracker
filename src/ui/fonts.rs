@@ -1,25 +1,20 @@
 use eframe::egui;
 
+use crate::constants::{FONT_PATHS, FONT_SCALE};
+
 pub fn setup_custom_fonts(ctx: &egui::Context) {
     // 現在のフォント設定を取得
     let mut fonts = egui::FontDefinitions::default();
 
-    // 日本語フォント（可変ウェイト）を追加
-    let font_paths = [
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-        "C:\\Windows\\Fonts\\meiryo.ttc",
-    ];
-
     let mut font_data_loaded = false;
-    for path in font_paths {
+    for path in FONT_PATHS {
         // パス確認
         if let Ok(font_data) = std::fs::read(path) {
             fonts.font_data.insert(
                 "my_font".to_owned(),
                 egui::FontData::from_owned(font_data)
                     .tweak(egui::FontTweak {
-                        scale: 1.2,
+                        scale: FONT_SCALE,
                         ..Default::default()
                     })
                     .into(),

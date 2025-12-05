@@ -17,11 +17,12 @@ pub fn show(ui: &mut egui::Ui, data: &AppData, selection: &SelectionState) -> Op
             categories.sort_by(|a, b| b.1.created_at.cmp(&a.1.created_at));
 
             // 各カテゴリを描画
-            for (cat_name, cat_data) in categories {
-                if let Some(act) = draw_single_category(ui, cat_name, cat_data, selection) {
-                    action = Some(act);
-                }
-            }
+            action = categories
+                .iter()
+                .filter_map(|(cat_name, cat_data)| {
+                    draw_single_category(ui, cat_name, cat_data, selection)
+                })
+                .last();
         });
 
     action
@@ -60,24 +61,22 @@ fn draw_single_category(
     action
 }
 
-/// カテゴリの中身（項目リストと追加ボタン）の描画
+/// カテゴリの中身描画
 fn draw_category_contents(
     ui: &mut egui::Ui,
     cat_name: &str,
     cat_data: &CategoryData,
     selection: &SelectionState,
 ) -> Option<Action> {
-    let mut action = None;
-
     // 項目を日付順にソート
-    let mut items: Vec<_> = cat_data.items.iter().collect();
+    let mut items = cat_data.items.iter().collect::<Vec<_>>();
     items.sort_by(|a, b| b.1.updated_at.cmp(&a.1.updated_at));
 
     // 各項目を描画
-    items
+    let mut action = items
         .iter()
         .filter_map(|(item_name, _)| draw_single_item(ui, cat_name, item_name, selection))
-        .for_each(|act| action = Some(act));
+        .last();
 
     ui.add_space(5.0);
 
@@ -100,7 +99,6 @@ fn draw_single_item(
 ) -> Option<Action> {
     let mut action = None;
 
-    // 選択状態の判定パスが state.selection... に変わっている点に注意
     let is_selected = selection.current_category.as_deref() == Some(cat_name)
         && selection.current_item.as_deref() == Some(item_name);
 

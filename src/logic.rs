@@ -1,4 +1,6 @@
-use crate::{models::ScoreEntry, utils};
+use std::iter::zip;
+
+use crate::{constants::PLOT_WEIGHT_THRESHOLD, models::ScoreEntry, utils};
 
 fn generate_weight(decay_rate: f64, n: usize) -> Vec<f64> {
     (0..n)
@@ -26,20 +28,19 @@ pub struct PlotParams {
     pub bar_base: f64,
 }
 
-/// 重みに基づいて、グラフの適切な表示範囲（底と天井）を計算する
-pub fn calculate_plot_params(scores: &[ScoreEntry], weights: &[f64]) -> PlotParams {
-    let weight_threshold = 0.1;
+fn filtered_scores(scores: &[ScoreEntry], weights: &[f64], threshold: f64) -> Option<Vec<i64>> {
+    let v: Vec<_> = zip(scores.iter(), weights.iter())
+        .filter_map(|(entry, &w)| (w >= threshold).then_some(entry.score))
+        .collect();
 
+    (!v.is_empty()).then_some(v) // フィルターによって要素がない場合は、すべて返す
+}
+
+/// 重みに基づいて、グラフの適切な表示範囲を計算する
+pub fn calculate_plot_params(scores: &[ScoreEntry], weights: &[f64]) -> PlotParams {
     // 重みが一定以上のスコアだけを抽出（なければ全データ）
-    let relevant_scores = Some(
-        scores
-            .iter()
-            .zip(weights.iter())
-            .filter_map(|(entry, &w)| (w >= weight_threshold).then_some(entry.score))
-            .collect::<Vec<_>>(),
-    )
-    .filter(|v| !v.is_empty())
-    .unwrap_or_else(|| scores.iter().map(|s| s.score).collect());
+    let relevant_scores = filtered_scores(scores, weights, PLOT_WEIGHT_THRESHOLD)
+        .unwrap_or_else(|| scores.iter().map(|s| s.score).collect());
 
     let min_score = *relevant_scores.iter().min().unwrap_or(&0);
     let max_score = *relevant_scores.iter().max().unwrap_or(&i64::MAX);
