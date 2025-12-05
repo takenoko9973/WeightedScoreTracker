@@ -184,7 +184,7 @@ impl ScoreTracker {
             return;
         };
 
-        let score = match text.parse::<i32>() {
+        let score = match text.parse::<i64>() {
             Ok(v) => v,
             Err(_) => {
                 self.state.error_message = Some("スコアには整数値を入力してください。".to_string());

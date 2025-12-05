@@ -1,30 +1,25 @@
-use crate::models::ScoreEntry;
+use crate::{models::ScoreEntry, utils};
 
-pub fn calculate_stats(scores: &[ScoreEntry], decay_rate: f64) -> (f64, usize, Vec<f64>) {
+fn generate_weight(decay_rate: f64, n: usize) -> Vec<f64> {
+    (0..n)
+        .map(|i| decay_rate.powi(i as i32))
+        .rev() // 最初のデータほど重みは少ない
+        .collect::<Vec<_>>()
+}
+
+pub fn calculate_stats(scores: &[ScoreEntry], decay_rate: f64) -> (f64, f64, usize, Vec<f64>) {
     if scores.is_empty() {
-        return (0.0, 0, Vec::new());
+        return (0.0, 0.0, 0, Vec::new());
     }
 
     let n = scores.len();
-    let mut weights = Vec::new();
-    let mut weighted_sum = 0.0;
-    let mut total_weight = 0.0;
+    let weights = generate_weight(decay_rate, n);
+    let score_values = scores.iter().map(|s| s.score as f64).collect::<Vec<_>>();
 
-    for (i, entry) in scores.iter().enumerate() {
-        let exponent = (n - 1) - i;
-        let w = decay_rate.powi(exponent as i32);
+    let mean = utils::weighted_mean(&score_values, &weights);
+    let std = utils::weighted_std(&score_values, &weights);
 
-        weights.push(w);
-        weighted_sum += entry.score as f64 * w;
-        total_weight += w;
-    }
-
-    let avg = if total_weight > 0.0 {
-        weighted_sum / total_weight
-    } else {
-        0.0
-    };
-    (avg, n, weights)
+    (mean, std, n, weights)
 }
 
 pub struct PlotParams {
@@ -47,7 +42,7 @@ pub fn calculate_plot_params(scores: &[ScoreEntry], weights: &[f64]) -> PlotPara
     .unwrap_or_else(|| scores.iter().map(|s| s.score).collect());
 
     let min_score = *relevant_scores.iter().min().unwrap_or(&0);
-    let max_score = *relevant_scores.iter().max().unwrap_or(&i32::MAX);
+    let max_score = *relevant_scores.iter().max().unwrap_or(&i64::MAX);
 
     // 余白計算
     let range = (max_score - min_score) as f64;

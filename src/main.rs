@@ -6,6 +6,7 @@ mod logic;
 mod models;
 mod persistence;
 mod ui;
+mod utils;
 
 use app::ScoreTracker;
 use eframe::egui;

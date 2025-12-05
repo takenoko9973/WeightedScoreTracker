@@ -6,7 +6,7 @@ use std::iter::zip;
 
 /// グラフの描画
 pub fn show(ui: &mut egui::Ui, item_data: &ItemData, selected_index: &mut Option<usize>) {
-    let (avg, _, weights) = calculate_stats(&item_data.scores, item_data.decay_rate);
+    let (avg, _, _, weights) = calculate_stats(&item_data.scores, item_data.decay_rate);
     let base_color = egui::Color32::from_rgb(65, 105, 225);
 
     let params = calculate_plot_params(&item_data.scores, &weights);
