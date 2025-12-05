@@ -1,3 +1,5 @@
+use eframe::egui;
+
 // --- ファイル保存 ---
 pub const DATA_FILENAME: &str = "scores_data.json";
 
@@ -22,3 +24,4 @@ pub const FONT_PATHS: &[&str] = &[
 // --- 計算・プロットロジック ---
 // グラフから非表示する重みの閾値
 pub const PLOT_WEIGHT_THRESHOLD: f64 = 0.1;
+pub const BAR_BASE_COLOR: egui::Color32 = egui::Color32::from_rgb(65, 105, 225);
