@@ -3,6 +3,7 @@ use crate::models::{AppData, ItemData};
 use crate::ui::Action;
 use crate::ui::components::{history_list, score_chart, score_input};
 use crate::ui::state::UiState;
+use crate::utils::comma_display::CommaDisplay;
 use eframe::egui::{self};
 
 pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<Action> {
@@ -62,11 +63,11 @@ fn draw_header(ui: &mut egui::Ui, item_data: &ItemData) -> Option<Action> {
 
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new(format!("現在の加重平均: {:.2}", avg))
+            egui::RichText::new(format!("現在の加重平均: {}", avg.to_comma_fmt(2)))
                 .size(16.0)
                 .strong(),
         );
-        ui.label(format!("(加重標準偏差: {:.2})", std));
+        ui.label(format!("(加重標準偏差: {})", std.to_comma_fmt(2)));
         ui.label(format!("(データ数: {})", count));
 
         // 右寄せ配置 (右から左に順番に設置)
@@ -74,7 +75,7 @@ fn draw_header(ui: &mut egui::Ui, item_data: &ItemData) -> Option<Action> {
             if ui.button("設定変更").clicked() {
                 action = Some(Action::ShowEditDecayModal);
             }
-            ui.label(format!("減衰率: {:.2}", item_data.decay_rate));
+            ui.label(format!("減衰率: {}", item_data.decay_rate.to_comma_fmt(2)));
         });
     });
 
