@@ -10,6 +10,7 @@ serde = { version = "1.0", features = ["derive"] } # シリアライズ
 serde_json = "1.0"                                 # JSON操作
 chrono = { version = "0.4", features = ["serde"] } # 日時操作
 rfd = "0.16"                                       # (オプション) ファイルダイアログ等が必要なら使うが今回は不要
+num-format = "0.4.4"
 
 [profile.release]
 opt-level = 3     # 最高レベルの最適化
