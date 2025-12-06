@@ -1,6 +1,10 @@
 use std::iter::zip;
 
-use crate::{constants::PLOT_WEIGHT_THRESHOLD, models::ScoreEntry, utils};
+use crate::{
+    constants::PLOT_WEIGHT_THRESHOLD,
+    models::ScoreEntry,
+    utils::weighted_statics::{weighted_mean, weighted_std},
+};
 
 fn generate_weight(decay_rate: f64, n: usize) -> Vec<f64> {
     (0..n)
@@ -18,8 +22,8 @@ pub fn calculate_stats(scores: &[ScoreEntry], decay_rate: f64) -> (f64, f64, usi
     let weights = generate_weight(decay_rate, n);
     let score_values = scores.iter().map(|s| s.score as f64).collect::<Vec<_>>();
 
-    let mean = utils::weighted_mean(&score_values, &weights);
-    let std = utils::weighted_std(&score_values, &weights);
+    let mean = weighted_mean(&score_values, &weights);
+    let std = weighted_std(&score_values, &weights);
 
     (mean, std, n, weights)
 }

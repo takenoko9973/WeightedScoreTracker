@@ -1,6 +1,7 @@
 use crate::constants::BAR_BASE_COLOR;
 use crate::logic::{PlotParams, calculate_plot_params, calculate_stats};
 use crate::models::ItemData;
+use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
 use egui_plot::{Bar, BarChart, Corner, Legend, Plot};
 use std::iter::zip;
@@ -81,6 +82,11 @@ fn draw_plot(
         .height(plot_height)
         .legend(Legend::default().position(Corner::RightBottom))
         .x_axis_formatter(|_, _| String::new())
+        .y_axis_formatter(|mark, _range| {
+            let span = _range.end() - _range.start();
+            let precision = (-span.log10().floor() + 1.0).max(0.0) as usize;
+            mark.value.to_comma_fmt(precision)
+        })
         .show_x(false)
         .allow_axis_zoom_drag(false)
         .allow_drag(false)
@@ -95,7 +101,7 @@ fn draw_plot(
                 .highlight(false)
                 .color(BAR_BASE_COLOR) // 凡例のカラー設定
                 .element_formatter(Box::new(|bar, _| {
-                    format!("{}\nスコア: {:.1}", bar.name, bar.value)
+                    format!("{}\nスコア: {}", bar.name, bar.value.to_comma_fmt(1))
                 })),
         );
 
