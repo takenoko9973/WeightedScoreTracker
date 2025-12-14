@@ -1,10 +1,8 @@
-use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-fn default_created_at() -> DateTime<Utc> {
-    Utc::now()
-}
+use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
+use crate::models::app::default_created_at;
 
 // バリデーションヘルパー関数
 pub fn validate_decay_rate_range(rate: f64) -> Result<(), String> {
