@@ -3,7 +3,7 @@ pub mod confirm;
 pub mod error;
 pub mod item;
 
-use crate::models::AppData;
+use crate::models::app::AppData;
 use crate::ui::Action;
 use crate::ui::state::{ModalType, UiState};
 use eframe::egui;

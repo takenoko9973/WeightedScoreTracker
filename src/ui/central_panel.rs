@@ -1,5 +1,5 @@
 use crate::logic::calculate_stats;
-use crate::models::{AppData, ItemData};
+use crate::models::app::{AppData, ItemData};
 use crate::ui::Action;
 use crate::ui::components::{history_list, score_chart, score_input};
 use crate::ui::state::UiState;

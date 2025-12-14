@@ -1,10 +1,17 @@
 use crate::constants::DEFAULT_DECAY_RATE;
-use crate::models::AppData;
+use crate::models::app::AppData;
 use crate::persistence::{load_data, save_data};
 use crate::ui::Action;
 use crate::ui::state::{ModalType, UiState};
 use crate::ui::{central_panel, modals, side_panel};
 use eframe::egui;
+
+fn decay_str_parse(rate_str: &str) -> Result<f64, String> {
+    match rate_str.parse::<f64>() {
+        Ok(v) => Ok(v),
+        Err(_) => Err("有効な数値を入力してください。".to_string()),
+    }
+}
 
 // アプリケーション状態保存
 pub struct ScoreTracker {
@@ -127,7 +134,7 @@ impl ScoreTracker {
 
     /// カテゴリ登録
     fn add_category(&mut self, name: String) {
-        match self.data.try_add_category(name) {
+        match self.data.add_category(name) {
             Ok(_) => {
                 self.save_to_file();
                 self.state.active_modal = ModalType::None;
@@ -143,7 +150,7 @@ impl ScoreTracker {
             return;
         }
 
-        match self.data.try_rename_category(&old_name, new_name.clone()) {
+        match self.data.rename_category(&old_name, new_name.clone()) {
             Ok(_) => {
                 if self.state.selection.current_category.as_ref() == Some(&old_name) {
                     self.state.selection.current_category = Some(new_name);
@@ -167,7 +174,7 @@ impl ScoreTracker {
             }
         };
 
-        match self.data.try_add_item(&cat_name, name, decay_rate) {
+        match self.data.add_item(&cat_name, name, decay_rate) {
             Ok(_) => {
                 self.save_to_file();
                 self.state.active_modal = ModalType::None;
@@ -194,7 +201,7 @@ impl ScoreTracker {
         };
 
         // 追加処理（マイナスチェックなどはモデル内で実行）
-        match self.data.try_add_score(cat, item, score) {
+        match self.data.add_score(cat, item, score) {
             Ok(_) => {
                 self.state.selection.input_score.clear();
                 self.save_to_file();
@@ -224,28 +231,31 @@ impl ScoreTracker {
         old_cat: String,
         old_item: String,
         new_cat: String,
-        new_name: String,
+        new_item: String,
         decay_str: String,
     ) {
-        let rate = match decay_str.parse::<f64>() {
-            Ok(v) => v,
-            Err(_) => {
-                self.state.error_message = Some("減衰率は数値を入力してください".to_string());
-                return;
-            }
-        };
+        // 操作をシミュレーション
+        let mut temp_data = self.data.clone();
 
-        match self
-            .data
-            .try_update_item(&old_cat, &old_item, &new_cat, new_name.clone(), rate)
-        {
+        let result = (|| -> Result<(), String> {
+            // シミュレート
+            let decay = decay_str_parse(&decay_str)?;
+            temp_data.move_item(&old_cat, &new_cat, &old_item)?;
+            temp_data.rename_item(&new_cat, &old_item, new_item.clone())?;
+            temp_data.update_decay(&new_cat, &new_item, decay)?;
+            Ok(())
+        })();
+
+        match result {
             Ok(_) => {
-                // 選択状態の追従：もし編集していた項目を選択中だったら、選択情報を更新する
+                self.data = temp_data; // 成功した場合はシミュレーション結果に上書き
+
+                // 選択状態の追従 : もし編集していた項目を選択中だったら、選択情報を更新する
                 if self.state.selection.current_category.as_ref() == Some(&old_cat)
                     && self.state.selection.current_item.as_ref() == Some(&old_item)
                 {
                     self.state.selection.current_category = Some(new_cat);
-                    self.state.selection.current_item = Some(new_name);
+                    self.state.selection.current_item = Some(new_item);
                 }
 
                 self.save_to_file();
@@ -256,7 +266,7 @@ impl ScoreTracker {
     }
 
     /// 減衰率変更
-    fn update_decay_rate(&mut self, rate_str: String) {
+    fn update_decay_rate(&mut self, decay_str: String) {
         let (Some(cat), Some(item)) = (
             &self.state.selection.current_category,
             &self.state.selection.current_item,
@@ -264,15 +274,15 @@ impl ScoreTracker {
             return;
         };
 
-        let rate = match rate_str.parse::<f64>() {
+        let decay = match decay_str_parse(&decay_str) {
             Ok(v) => v,
-            Err(_) => {
-                self.state.error_message = Some("有効な数値を入力してください。".to_string());
+            Err(msg) => {
+                self.state.error_message = Some(msg);
                 return;
             }
         };
 
-        match self.data.try_update_decay_rate(cat, item, rate) {
+        match self.data.update_decay(cat, item, decay) {
             Ok(_) => {
                 self.save_to_file();
                 self.state.active_modal = ModalType::None;
@@ -284,7 +294,7 @@ impl ScoreTracker {
     /// カテゴリ削除実行
     fn execute_delete_category(&mut self, name: String) {
         // モデルの処理を呼び出し、結果で分岐
-        match self.data.try_remove_category(&name) {
+        match self.data.remove_category(&name) {
             Ok(_) => {
                 if self.state.selection.current_category.as_ref() == Some(&name) {
                     self.state.selection.current_category = None;
@@ -301,7 +311,7 @@ impl ScoreTracker {
 
     /// 項目削除
     fn execute_delete_item(&mut self, cat: String, item: String) {
-        match self.data.try_remove_item(&cat, &item) {
+        match self.data.remove_item(&cat, &item) {
             Ok(_) => {
                 if self.state.selection.current_category.as_ref() == Some(&cat)
                     && self.state.selection.current_item.as_ref() == Some(&item)
@@ -327,7 +337,7 @@ impl ScoreTracker {
             return;
         };
 
-        match self.data.try_remove_score(cat, item, idx) {
+        match self.data.remove_score(cat, item, idx) {
             Ok(_) => {
                 self.state.selection.selected_history_index = None;
                 self.save_to_file();

@@ -1,5 +1,5 @@
 use crate::constants::DATA_FILENAME;
-use crate::models::AppData;
+use crate::models::app::AppData;
 use std::fs;
 use std::path::Path;
 

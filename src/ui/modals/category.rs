@@ -1,7 +1,6 @@
-// src/ui/modals/category.rs
+use eframe::egui;
 
 use crate::ui::Action;
-use eframe::egui;
 
 pub fn show_add(
     ctx: &egui::Context,

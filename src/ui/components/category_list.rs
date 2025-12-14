@@ -1,6 +1,6 @@
-use crate::models::{AppData, CategoryData};
-use crate::ui::Action;
+use crate::models::app::CategoryData;
 use crate::ui::state::SelectionState;
+use crate::{models::app::AppData, ui::Action};
 use eframe::egui::{self, UiKind};
 
 /// カテゴリリスト描画のエントリーポイント

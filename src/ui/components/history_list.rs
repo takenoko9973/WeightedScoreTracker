@@ -1,4 +1,4 @@
-use crate::models::{ItemData, ScoreEntry};
+use crate::models::app::{ItemData, ScoreEntry};
 use crate::ui::Action;
 use crate::ui::state::UiState;
 use eframe::egui;

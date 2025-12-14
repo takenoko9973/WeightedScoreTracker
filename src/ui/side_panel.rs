@@ -1,8 +1,9 @@
 use eframe::egui;
 
+use crate::models::app::AppData;
 use crate::ui::Action;
 use crate::ui::components::category_list;
-use crate::{models::AppData, ui::state::UiState};
+use crate::ui::state::UiState;
 
 /// サイドパネル描画のエントリーポイント
 pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<Action> {
