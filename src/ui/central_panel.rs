@@ -73,7 +73,7 @@ fn draw_header(ui: &mut egui::Ui, item_data: &ItemData) -> Option<Action> {
         // 右寄せ配置 (右から左に順番に設置)
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button("設定変更").clicked() {
-                action = Some(Action::ShowEditDecayModal);
+                action = Some(Action::ShowEditDecayModal(item_data.decay_rate));
             }
             ui.label(format!("減衰率: {}", item_data.decay_rate.to_comma_fmt(2)));
         });

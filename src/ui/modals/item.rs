@@ -1,5 +1,4 @@
 use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
-use crate::models::app::AppData;
 use crate::ui::Action;
 use eframe::egui;
 
@@ -87,12 +86,12 @@ pub fn show_edit_decay(
 
 pub fn show_edit(
     ctx: &egui::Context,
-    data: &AppData,    // カテゴリ一覧を取得するためにデータが必要
+    categories: Vec<&String>,
     target_cat: &str,  // 元のカテゴリ
     target_item: &str, // 元の項目名
-    input_name: &mut String,
+    input_cat: &mut String,
+    input_item: &mut String,
     input_decay: &mut String,
-    input_cat: &mut String, // 移動先カテゴリの選択状態
     should_close: &mut bool,
 ) -> Option<Action> {
     let mut action = None;
@@ -107,21 +106,19 @@ pub fn show_edit(
                 .num_columns(2)
                 .spacing([10.0, 10.0])
                 .show(ui, |ui| {
-                    ui.label("項目名:");
-                    ui.text_edit_singleline(input_name);
-                    ui.end_row();
-
                     ui.label("カテゴリ:");
                     egui::ComboBox::from_id_salt("cat_select")
                         .selected_text(input_cat.clone())
                         .show_ui(ui, |ui| {
                             // 存在するカテゴリを一覧表示
-                            let mut cats: Vec<_> = data.categories.keys().collect();
-                            cats.sort(); // 探しやすくソート
-                            for cat in cats {
+                            categories.into_iter().for_each(|cat| {
                                 ui.selectable_value(input_cat, cat.clone(), cat);
-                            }
+                            });
                         });
+                    ui.end_row();
+
+                    ui.label("項目名:");
+                    ui.text_edit_singleline(input_item);
                     ui.end_row();
 
                     ui.label("減衰率:");
@@ -147,7 +144,7 @@ pub fn show_edit(
                         target_cat.to_string(),
                         target_item.to_string(),
                         input_cat.clone(),
-                        input_name.clone(),
+                        input_item.clone(),
                         input_decay.clone(),
                     ));
                 }

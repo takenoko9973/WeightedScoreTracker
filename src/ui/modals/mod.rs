@@ -2,10 +2,12 @@ pub mod category;
 pub mod confirm;
 pub mod error;
 pub mod item;
+pub mod types;
 
 use crate::models::app::AppData;
 use crate::ui::Action;
-use crate::ui::state::{ModalType, UiState};
+use crate::ui::modals::types::ModalType;
+use crate::ui::state::UiState;
 use eframe::egui;
 
 /// モーダル描画のエントリーポイント
@@ -51,18 +53,21 @@ pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<
         ModalType::EditItem {
             target_cat,
             target_item,
-            input_name,
-            input_decay,
             input_cat,
+            input_item,
+            input_decay,
         } => {
+            let mut categories = data.categories.keys().collect::<Vec<_>>();
+            categories.sort();
+
             action = item::show_edit(
                 ctx,
-                data,
+                categories,
                 target_cat,
                 target_item,
-                input_name,
-                input_decay,
                 input_cat,
+                input_item,
+                input_decay,
                 &mut should_close,
             );
         }

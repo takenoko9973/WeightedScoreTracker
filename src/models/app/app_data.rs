@@ -13,7 +13,7 @@ impl AppData {
     // ヘルパー関数
 
     /// カテゴリを検索、参照を返す
-    fn get_category(&self, cat_name: &str) -> Result<&CategoryData, String> {
+    pub fn get_category(&self, cat_name: &str) -> Result<&CategoryData, String> {
         self.categories
             .get(cat_name)
             .ok_or_else(|| format!("カテゴリ「{}」が見つかりません。", cat_name))
@@ -26,9 +26,8 @@ impl AppData {
             .ok_or_else(|| format!("カテゴリ「{}」が見つかりません。", cat_name))
     }
 
-    #[allow(dead_code)]
     /// 項目を検索、参照を返す
-    fn get_item(&self, cat_name: &str, item_name: &str) -> Result<&ItemData, String> {
+    pub fn get_item(&self, cat_name: &str, item_name: &str) -> Result<&ItemData, String> {
         self.get_category(cat_name)?
             .items
             .get(item_name)
@@ -41,6 +40,11 @@ impl AppData {
             .items
             .get_mut(item_name)
             .ok_or_else(|| format!("項目「{}」が見つかりません。", item_name))
+    }
+
+    /// 減衰率を取得
+    pub fn get_item_decay(&self, cat_name: &str, item_name: &str) -> Result<f64, String> {
+        Ok(self.get_item(cat_name, item_name)?.decay_rate)
     }
 
     // =======================================================================================

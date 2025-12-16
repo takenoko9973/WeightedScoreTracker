@@ -1,8 +1,8 @@
-use crate::constants::DEFAULT_DECAY_RATE;
 use crate::models::app::AppData;
 use crate::persistence::{load_data, save_data};
 use crate::ui::Action;
-use crate::ui::state::{ModalType, UiState};
+use crate::ui::modals::types::ModalType;
+use crate::ui::state::UiState;
 use crate::ui::{central_panel, modals, side_panel};
 use eframe::egui;
 
@@ -31,22 +31,36 @@ impl ScoreTracker {
     fn handle_action(&mut self, action: Action) {
         match action {
             // モーダル表示系
-            Action::ShowAddCategoryModal => self.open_add_category_modal(),
-            Action::ShowRenameCategoryModal(now_name) => self.open_rename_category_modal(now_name),
-            Action::ShowAddItemModal(cat_name) => self.open_add_item_modal(cat_name),
-            Action::ShowEditItemModal(cat, item) => self.open_edit_item_modal(cat, item),
-            Action::ShowEditDecayModal => self.open_edit_decay_modal(),
-            Action::ShowDeleteCategoryConfirm(name) => {
-                self.state.active_modal = ModalType::ConfirmDeleteCategory { target: name };
+            Action::ShowAddCategoryModal => {
+                self.state.open_add_category_modal();
             }
-            Action::ShowDeleteItemConfirm(cat, item) => {
-                self.state.active_modal = ModalType::ConfirmDeleteItem {
-                    target_cat: cat,
-                    target_item: item,
+            Action::ShowRenameCategoryModal(cat_name) => {
+                self.state.open_rename_category_modal(cat_name);
+            }
+            Action::ShowAddItemModal(cat_name) => {
+                self.state.open_add_item_modal(cat_name);
+            }
+            Action::ShowEditItemModal(cat_name, item_name) => {
+                let decay_rate = match self.data.get_item_decay(&cat_name, &item_name) {
+                    Ok(item) => item,
+                    Err(msg) => {
+                        self.state.error_message = Some(msg);
+                        return;
+                    }
                 };
+                self.state
+                    .open_edit_item_modal(cat_name, item_name, decay_rate);
             }
-            Action::ShowDeleteScoreConfirm(idx) => {
-                self.state.active_modal = ModalType::ConfirmDeleteScore { index: idx }
+            Action::ShowEditDecayModal(decay_rate) => self.state.open_edit_decay_modal(decay_rate),
+            Action::ShowDeleteCategoryConfirm(cat_name) => {
+                self.state.show_delete_category_confirm_modal(cat_name);
+            }
+            Action::ShowDeleteItemConfirm(cat_name, item_name) => {
+                self.state
+                    .show_delete_item_confirm_modal(cat_name, item_name);
+            }
+            Action::ShowDeleteScoreConfirm(index) => {
+                self.state.show_delete_score_confirm_modal(index);
             }
 
             // データ操作系
@@ -71,50 +85,6 @@ impl ScoreTracker {
     fn save_to_file(&mut self) {
         if let Err(e) = save_data(&self.data) {
             self.state.error_message = Some(format!("保存に失敗しました: {}", e));
-        }
-    }
-
-    // ======================================
-    // モーダル表示
-    // ======================================
-
-    /// カテゴリ登録
-    fn open_add_category_modal(&mut self) {
-        self.state.active_modal = ModalType::AddCategory {
-            input_name: String::new(),
-        };
-    }
-
-    fn open_rename_category_modal(&mut self, target_cat: String) {
-        self.state.active_modal = ModalType::RenameCategory {
-            input_new_name: target_cat.clone(), // 初期値は現在の名前
-            target: target_cat.clone(),
-        };
-    }
-
-    fn open_add_item_modal(&mut self, cat_name: String) {
-        self.state.active_modal = ModalType::AddItem {
-            target_category: cat_name,
-            input_name: String::new(),
-            input_decay: DEFAULT_DECAY_RATE.to_string(),
-        };
-    }
-
-    /// 減衰率変更
-    fn open_edit_decay_modal(&mut self) {
-        let (Some(c), Some(i)) = (
-            &self.state.selection.current_category,
-            &self.state.selection.current_item,
-        ) else {
-            return;
-        };
-
-        if let Some(cat) = self.data.categories.get(c)
-            && let Some(item) = cat.items.get(i)
-        {
-            self.state.active_modal = ModalType::EditDecay {
-                input_decay: item.decay_rate.to_string(),
-            };
         }
     }
 
@@ -207,21 +177,6 @@ impl ScoreTracker {
                 self.save_to_file();
             }
             Err(msg) => self.state.error_message = Some(msg),
-        }
-    }
-
-    /// 項目設定変更
-    fn open_edit_item_modal(&mut self, cat: String, item: String) {
-        if let Some(c_data) = self.data.categories.get(&cat)
-            && let Some(i_data) = c_data.items.get(&item)
-        {
-            self.state.active_modal = ModalType::EditItem {
-                target_cat: cat.clone(),
-                target_item: item.clone(),
-                input_name: item,
-                input_decay: i_data.decay_rate.to_string(),
-                input_cat: cat, // 初期値は現在のカテゴリ
-            };
         }
     }
 
