@@ -10,7 +10,7 @@ pub mod state;
 pub enum Action {
     // --- モーダル表示リクエスト ---
     ShowAddCategoryModal,                  // カテゴリ追加
-    ShowRenameCategoryModal(String),       // カテゴリ名変更 (対象カテゴリ名)
+    ShowEditCategoryModal(String),         // カテゴリ名変更 (対象カテゴリ名)
     ShowAddItemModal(String),              // 項目追加 (親カテゴリ名)
     ShowEditItemModal(String, String),     // 項目編集 (カテゴリ名, 項目名)
     ShowEditDecayModal(f64),               // 減衰率更新

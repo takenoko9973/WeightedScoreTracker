@@ -1,7 +1,6 @@
 use crate::models::app::AppData;
 use crate::persistence::{load_data, save_data};
 use crate::ui::Action;
-use crate::ui::modals::types::ModalType;
 use crate::ui::state::UiState;
 use crate::ui::{central_panel, modals, side_panel};
 use eframe::egui;
@@ -34,11 +33,11 @@ impl ScoreTracker {
             Action::ShowAddCategoryModal => {
                 self.state.open_add_category_modal();
             }
-            Action::ShowRenameCategoryModal(cat_name) => {
-                self.state.open_rename_category_modal(cat_name);
-            }
             Action::ShowAddItemModal(cat_name) => {
                 self.state.open_add_item_modal(cat_name);
+            }
+            Action::ShowEditCategoryModal(cat_name) => {
+                self.state.open_edit_category_modal(cat_name);
             }
             Action::ShowEditItemModal(cat_name, item_name) => {
                 let decay_rate = match self.data.get_item_decay(&cat_name, &item_name) {
@@ -48,10 +47,16 @@ impl ScoreTracker {
                         return;
                     }
                 };
+
+                let mut categories = self.data.categories.keys().cloned().collect::<Vec<_>>();
+                categories.sort();
+
                 self.state
-                    .open_edit_item_modal(cat_name, item_name, decay_rate);
+                    .open_edit_item_modal(cat_name, item_name, decay_rate, categories);
             }
-            Action::ShowEditDecayModal(decay_rate) => self.state.open_edit_decay_modal(decay_rate),
+            Action::ShowEditDecayModal(decay_rate) => {
+                self.state.open_edit_decay_modal(decay_rate);
+            }
             Action::ShowDeleteCategoryConfirm(cat_name) => {
                 self.state.show_delete_category_confirm_modal(cat_name);
             }
@@ -107,7 +112,7 @@ impl ScoreTracker {
         match self.data.add_category(name) {
             Ok(_) => {
                 self.save_to_file();
-                self.state.active_modal = ModalType::None;
+                self.state.active_modal = None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -116,7 +121,7 @@ impl ScoreTracker {
     /// カテゴリ名変更
     fn rename_category(&mut self, old_name: String, new_name: String) {
         if old_name == new_name {
-            self.state.active_modal = ModalType::None;
+            self.state.active_modal = None;
             return;
         }
 
@@ -126,7 +131,7 @@ impl ScoreTracker {
                     self.state.selection.current_category = Some(new_name);
                 }
                 self.save_to_file();
-                self.state.active_modal = ModalType::None;
+                self.state.active_modal = None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -147,7 +152,7 @@ impl ScoreTracker {
         match self.data.add_item(&cat_name, name, decay_rate) {
             Ok(_) => {
                 self.save_to_file();
-                self.state.active_modal = ModalType::None;
+                self.state.active_modal = None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -214,7 +219,7 @@ impl ScoreTracker {
                 }
 
                 self.save_to_file();
-                self.state.active_modal = ModalType::None;
+                self.state.active_modal = None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -240,7 +245,7 @@ impl ScoreTracker {
         match self.data.update_decay(cat, item, decay) {
             Ok(_) => {
                 self.save_to_file();
-                self.state.active_modal = ModalType::None;
+                self.state.active_modal = None;
             }
             Err(msg) => self.state.error_message = Some(msg),
         }
@@ -256,7 +261,7 @@ impl ScoreTracker {
                     self.state.selection.current_item = None;
                 }
                 self.save_to_file();
-                self.state.active_modal = ModalType::None;
+                self.state.active_modal = None;
             }
             Err(msg) => {
                 self.state.error_message = Some(msg);
@@ -275,7 +280,7 @@ impl ScoreTracker {
                     self.state.selection.selected_history_index = None;
                 }
                 self.save_to_file();
-                self.state.active_modal = ModalType::None;
+                self.state.active_modal = None;
             }
             Err(msg) => {
                 self.state.error_message = Some(msg);
@@ -296,7 +301,7 @@ impl ScoreTracker {
             Ok(_) => {
                 self.state.selection.selected_history_index = None;
                 self.save_to_file();
-                self.state.active_modal = ModalType::None;
+                self.state.active_modal = None;
             }
             Err(msg) => {
                 self.state.error_message = Some(msg);
@@ -309,7 +314,7 @@ impl eframe::App for ScoreTracker {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let side_act = side_panel::draw(ctx, &self.data, &mut self.state);
         let central_act = central_panel::draw(ctx, &self.data, &mut self.state);
-        let modal_act = modals::draw(ctx, &self.data, &mut self.state);
+        let modal_act = modals::show_active_modal(ctx, &mut self.state);
 
         let action = modal_act.or(side_act).or(central_act);
 
