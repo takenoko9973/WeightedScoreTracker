@@ -111,7 +111,11 @@ impl WeightedScoreChart {
                     .highlight(false)
                     .color(BAR_BASE_COLOR) // 凡例のカラー設定
                     .element_formatter(Box::new(|bar, _| {
-                        format!("{}\nスコア: {}", bar.name, bar.value.to_comma_fmt(1))
+                        format!(
+                            "{}\nスコア: {}",
+                            bar.name,
+                            (bar.value + bar.base_offset.unwrap_or(0.0)).to_comma_fmt(0)
+                        )
                     })),
             );
 
