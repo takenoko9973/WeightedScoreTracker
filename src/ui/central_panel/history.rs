@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use crate::{models::app::ScoreEntry, ui::Action};
+use crate::{models::app::ScoreEntry, ui::Action, utils::comma_display::CommaDisplay};
 
 pub struct HistoryList<'a> {
     score_entries: &'a [ScoreEntry],
@@ -104,7 +104,7 @@ impl<'a> HistoryRow<'a> {
                 "[{}] {}回目: {}",
                 date_str,
                 self.index + 1,
-                self.entry.score
+                self.entry.score.to_comma()
             );
 
             // ラベル
