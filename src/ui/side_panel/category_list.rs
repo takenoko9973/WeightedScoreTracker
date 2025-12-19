@@ -1,6 +1,6 @@
-use crate::models::{AppData, CategoryData};
-use crate::ui::Action;
+use crate::models::app::CategoryData;
 use crate::ui::state::SelectionState;
+use crate::{models::app::AppData, ui::Action};
 use eframe::egui::{self, UiKind};
 
 /// カテゴリリスト描画のエントリーポイント
@@ -49,7 +49,7 @@ fn draw_single_category(
     // カテゴリに対する右クリックメニュー
     header_response.header_response.context_menu(|ui| {
         if ui.button("✏ 名前を変更").clicked() {
-            action = Some(Action::ShowRenameCategoryModal(cat_name.to_string()));
+            action = Some(Action::ShowEditCategoryModal(cat_name.to_string()));
             ui.close_kind(UiKind::Menu);
         }
         if ui.button("🗑 このカテゴリを削除").clicked() {

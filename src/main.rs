@@ -9,7 +9,7 @@ mod persistence;
 mod ui;
 mod utils;
 
-use app::ScoreTracker;
+use app::WeightedScoreTracker;
 use constants::{WINDOW_HEIGHT, WINDOW_WIDTH};
 use eframe::egui;
 use ui::fonts::setup_custom_fonts;
@@ -26,7 +26,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(|cc| {
             setup_custom_fonts(&cc.egui_ctx);
-            Ok(Box::new(ScoreTracker::new(cc)))
+            Ok(Box::new(WeightedScoreTracker::new(cc)))
         }),
     )
 }

@@ -1,125 +1,85 @@
-// src/ui/modals/confirm.rs
-
-use crate::models::AppData;
-use crate::ui::Action;
-use crate::ui::state::SelectionState;
 use eframe::egui;
 
-pub fn show_delete_category(
-    ctx: &egui::Context,
-    target_cat: &str,
-    should_close: &mut bool,
-) -> Option<Action> {
-    let mut action = None;
-    let mut open = true;
+use super::{Modal, ModalResult};
+use crate::ui::Action;
 
-    egui::Window::new("削除確認")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .show(ctx, |ui| {
-            ui.label(format!("カテゴリ \"{}\" を削除しますか？", target_cat));
-            ui.label(
-                egui::RichText::new("※含まれる全ての項目とスコアが完全に消去されます。")
-                    .color(egui::Color32::RED),
-            );
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                if ui.button("削除する").clicked() {
-                    action = Some(Action::ExecuteDeleteCategory(target_cat.to_string()));
-                }
-                if ui.button("キャンセル").clicked() {
-                    open = false;
-                }
-            });
-        });
-
-    if !open {
-        *should_close = true;
-    }
-    action
+pub struct ConfirmationModal {
+    title: String,
+    message: String,
+    ok_action: Action,
 }
 
-pub fn show_delete_item(
-    ctx: &egui::Context,
-    target_cat: &str,
-    target_item: &str,
-    should_close: &mut bool,
-) -> Option<Action> {
-    let mut action = None;
-    let mut open = true;
-
-    egui::Window::new("削除確認")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .show(ctx, |ui| {
-            ui.label(format!("\"{}\" を削除しますか？", target_item));
-            ui.label(
-                egui::RichText::new("※含まれる全てのスコアデータが完全に消去されます。")
-                    .color(egui::Color32::RED),
-            );
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                if ui.button("削除する").clicked() {
-                    action = Some(Action::ExecuteDeleteItem(
-                        target_cat.to_string(),
-                        target_item.to_string(),
-                    ));
-                }
-                if ui.button("キャンセル").clicked() {
-                    open = false;
-                }
-            });
-        });
-
-    if !open {
-        *should_close = true;
+impl ConfirmationModal {
+    pub fn new(title: impl Into<String>, message: impl Into<String>, action: Action) -> Self {
+        Self {
+            title: title.into(),
+            message: message.into(),
+            ok_action: action,
+        }
     }
-    action
+
+    /// カテゴリ削除
+    pub fn new_delete_category(cat_name: String) -> Self {
+        Self::new(
+            "カテゴリ削除",
+            format!(
+                "カテゴリ「{}」を削除しますか？\n含まれるすべての項目と履歴が失われます。",
+                cat_name
+            ),
+            Action::ExecuteDeleteCategory(cat_name),
+        )
+    }
+
+    /// 項目削除
+    pub fn new_delete_item(cat_name: String, item_name: String) -> Self {
+        Self::new(
+            "項目削除",
+            format!(
+                "項目「{}」を削除しますか？\nこの項目の履歴データもすべて失われます。",
+                item_name
+            ),
+            Action::ExecuteDeleteItem(cat_name, item_name),
+        )
+    }
+
+    /// スコア削除
+    pub fn new_delete_score(index: usize) -> Self {
+        Self::new(
+            "スコア削除",
+            format!("{}個目のスコアを削除しますか？", index),
+            Action::ExecuteDeleteScore(index),
+        )
+    }
 }
 
-pub fn show_delete_score(
-    ctx: &egui::Context,
-    data: &AppData,
-    selection: &SelectionState,
-    delete_idx: usize,
-    should_close: &mut bool,
-) -> Option<Action> {
-    let mut action = None;
-    let mut open = true;
+impl Modal for ConfirmationModal {
+    fn show(&mut self, ctx: &egui::Context) -> ModalResult {
+        let mut result = ModalResult::KeepOpen;
 
-    // 削除対象の情報を表示用に取得
-    let mut target_info = String::new();
-    if let (Some(cat_name), Some(item_name)) =
-        (&selection.current_category, &selection.current_item)
-        && let Some(cat_data) = data.categories.get(cat_name)
-        && let Some(item_data) = cat_data.items.get(item_name)
-        && let Some(entry) = item_data.scores.get(delete_idx)
-    {
-        target_info = format!("{}回目: {}", delete_idx + 1, entry.score);
-    }
+        // 汎用的な確認ダイアログの描画
+        egui::Window::new(&self.title)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0)) // 中央表示
+            .show(ctx, |ui| {
+                ui.label(&self.message);
 
-    egui::Window::new("削除確認")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .show(ctx, |ui| {
-            ui.label("このスコアを削除しますか？");
-            ui.label(egui::RichText::new(target_info).strong());
-            ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                if ui.button("はい").clicked() {
-                    action = Some(Action::ExecuteDeleteScore(delete_idx));
-                }
-                if ui.button("いいえ").clicked() {
-                    open = false;
-                }
+                ui.add_space(20.0);
+
+                ui.horizontal(|ui| {
+                    let delete_button =
+                        ui.button(egui::RichText::new("削除").color(egui::Color32::RED));
+                    let cancel_button = ui.button("キャンセル");
+
+                    if cancel_button.clicked() {
+                        result = ModalResult::Close;
+                    }
+                    if delete_button.clicked() {
+                        result = ModalResult::Dispatch(self.ok_action.clone());
+                    }
+                });
             });
-        });
 
-    if !open {
-        *should_close = true;
+        result
     }
-    action
 }

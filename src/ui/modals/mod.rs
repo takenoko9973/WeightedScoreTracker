@@ -1,105 +1,82 @@
-pub mod category;
+pub mod add_category;
+pub mod add_item;
 pub mod confirm;
+pub mod edit_category;
+pub mod edit_decay;
+pub mod edit_item;
 pub mod error;
-pub mod item;
 
-use crate::models::AppData;
 use crate::ui::Action;
-use crate::ui::state::{ModalType, UiState};
+use crate::ui::modals::error::ErrorModal;
+use crate::ui::state::UiState;
 use eframe::egui;
 
-/// モーダル描画のエントリーポイント
-pub fn draw(ctx: &egui::Context, data: &AppData, state: &mut UiState) -> Option<Action> {
-    let mut action = None;
+/// モーダル管理
+pub struct ModalLayer {
+    active_modal: Option<Box<dyn Modal>>,
+}
 
-    // 1. エラーダイアログ (グローバル)
-    if state.error_message.is_some() {
-        error::show(ctx, state);
+impl ModalLayer {
+    pub fn new() -> Self {
+        Self { active_modal: None }
     }
 
-    // 2. アクティブなモーダルの描画
-    let mut should_close = false;
+    /// モーダルを開く
+    pub fn open<M: Modal + 'static>(&mut self, modal: M) {
+        self.active_modal = Some(Box::new(modal));
+    }
 
-    match &mut state.active_modal {
-        ModalType::None => {}
+    /// モーダルを閉じる
+    pub fn close(&mut self) {
+        self.active_modal = None;
+    }
 
-        ModalType::AddCategory { input_name } => {
-            action = category::show_add(ctx, input_name, &mut should_close);
-        }
+    /// 描画処理
+    pub fn show(&mut self, ctx: &egui::Context, state: &mut UiState) -> Option<Action> {
+        let mut action = None;
+        let mut should_close = false;
 
-        ModalType::RenameCategory {
-            target,
-            input_new_name,
-        } => {
-            action = category::show_rename(ctx, target, input_new_name, &mut should_close);
-        }
+        // エラーモーダル
+        if let Some(msg) = &state.error_message {
+            let mut error_modal = ErrorModal::new(msg.to_string());
 
-        ModalType::AddItem {
-            target_category,
-            input_name,
-            input_decay,
-        } => {
-            action = item::show_add(
-                ctx,
-                target_category,
-                input_name,
-                input_decay,
-                &mut should_close,
-            );
-        }
-
-        ModalType::EditItem {
-            target_cat,
-            target_item,
-            input_name,
-            input_decay,
-            input_cat,
-        } => {
-            action = item::show_edit(
-                ctx,
-                data,
-                target_cat,
-                target_item,
-                input_name,
-                input_decay,
-                input_cat,
-                &mut should_close,
-            );
-        }
-
-        ModalType::EditDecay { input_decay } => {
-            if let (Some(cat), Some(item_name)) = (
-                &state.selection.current_category,
-                &state.selection.current_item,
-            ) {
-                action = item::show_edit_decay(ctx, cat, item_name, input_decay, &mut should_close);
-            } else {
-                should_close = true;
+            match error_modal.show(ctx) {
+                ModalResult::KeepOpen => {}
+                ModalResult::Close => {
+                    state.error_message = None;
+                }
+                ModalResult::Dispatch(_) => {}
             }
         }
 
-        ModalType::ConfirmDeleteCategory { target } => {
-            action = confirm::show_delete_category(ctx, target, &mut should_close);
+        // 通常モーダル
+        if let Some(modal) = &mut self.active_modal {
+            match modal.show(ctx) {
+                ModalResult::KeepOpen => {}
+                ModalResult::Close => should_close = true,
+                ModalResult::Dispatch(act) => {
+                    action = Some(act);
+                    should_close = true;
+                }
+            }
         }
 
-        ModalType::ConfirmDeleteItem {
-            target_cat,
-            target_item,
-        } => {
-            action = confirm::show_delete_item(ctx, target_cat, target_item, &mut should_close);
+        if should_close {
+            self.active_modal = None;
         }
 
-        ModalType::ConfirmDeleteScore { index } => {
-            // SelectionState のみを渡す
-            action =
-                confirm::show_delete_score(ctx, data, &state.selection, *index, &mut should_close);
-        }
+        action
     }
+}
 
-    // 3. 閉じるフラグの処理
-    if should_close {
-        state.active_modal = ModalType::None;
-    }
+/// モーダルの実行結果
+pub enum ModalResult {
+    KeepOpen,         // 開いたまま
+    Close,            // 閉じる（キャンセルなど）
+    Dispatch(Action), // アクションを実行して閉じる
+}
 
-    action
+/// モーダル用インターフェース
+pub trait Modal {
+    fn show(&mut self, ctx: &egui::Context) -> ModalResult;
 }

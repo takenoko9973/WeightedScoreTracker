@@ -1,14 +1,4 @@
-#[derive(Default)]
-pub struct UiState {
-    /// 常駐する画面の選択状態や入力欄
-    pub selection: SelectionState,
-
-    /// 現在開いているモーダル
-    pub active_modal: ModalType,
-
-    /// エラーメッセージ（グローバル）
-    pub error_message: Option<String>,
-}
+use crate::ui::modals::Modal;
 
 /// メイン画面での選択・入力状態
 #[derive(Default)]
@@ -19,47 +9,14 @@ pub struct SelectionState {
     pub input_score: String,
 }
 
-//・ モーダルの定義
 #[derive(Default)]
-pub enum ModalType {
-    #[default]
-    None,
-    // カテゴリ追加画面の状態
-    AddCategory {
-        input_name: String,
-    },
-    // カテゴリ名変更画面の状態
-    RenameCategory {
-        target: String,
-        input_new_name: String,
-    },
-    // 項目追加画面の状態
-    AddItem {
-        target_category: String,
-        input_name: String,
-        input_decay: String,
-    },
-    // 項目編集
-    EditItem {
-        target_cat: String,  // 元のカテゴリ
-        target_item: String, // 元の項目名
-        input_name: String,  // 名前入力用
-        input_decay: String, // 減衰率入力用
-        input_cat: String,   // カテゴリ選択用（移動先）
-    },
-    // 減衰率変更画面の状態
-    EditDecay {
-        input_decay: String,
-    },
-    // 削除確認ダイアログ
-    ConfirmDeleteCategory {
-        target: String,
-    },
-    ConfirmDeleteItem {
-        target_cat: String,
-        target_item: String,
-    },
-    ConfirmDeleteScore {
-        index: usize,
-    },
+pub struct UiState {
+    /// 常駐する画面の選択状態や入力欄
+    pub selection: SelectionState,
+
+    /// 現在開いているモーダル
+    pub active_modal: Option<Box<dyn Modal>>,
+
+    /// エラーメッセージ
+    pub error_message: Option<String>,
 }

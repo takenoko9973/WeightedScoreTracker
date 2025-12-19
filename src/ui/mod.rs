@@ -1,5 +1,4 @@
 pub mod central_panel;
-pub mod components;
 pub mod fonts;
 pub mod modals;
 pub mod side_panel;
@@ -10,10 +9,10 @@ pub mod state;
 pub enum Action {
     // --- モーダル表示リクエスト ---
     ShowAddCategoryModal,                  // カテゴリ追加
-    ShowRenameCategoryModal(String),       // カテゴリ名変更 (対象カテゴリ名)
+    ShowEditCategoryModal(String),         // カテゴリ名変更 (対象カテゴリ名)
     ShowAddItemModal(String),              // 項目追加 (親カテゴリ名)
     ShowEditItemModal(String, String),     // 項目編集 (カテゴリ名, 項目名)
-    ShowEditDecayModal,                    // 減衰率更新
+    ShowEditDecayModal(f64),               // 減衰率更新
     ShowDeleteCategoryConfirm(String),     // カテゴリ削除 (対象カテゴリ名)
     ShowDeleteItemConfirm(String, String), // 項目削除 (カテゴリ名, 項目名)
     ShowDeleteScoreConfirm(usize),         // スコア削除 (対象インデックス)

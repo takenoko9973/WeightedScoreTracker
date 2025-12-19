@@ -2,7 +2,7 @@ use std::iter::zip;
 
 use crate::{
     constants::PLOT_WEIGHT_THRESHOLD,
-    models::ScoreEntry,
+    models::app::ScoreEntry,
     utils::weighted_statics::{weighted_mean, weighted_std},
 };
 
