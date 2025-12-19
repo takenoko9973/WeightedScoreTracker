@@ -1,9 +1,18 @@
+use eframe::egui;
+
 use crate::models::app::AppData;
 use crate::persistence::{load_data, save_data};
 use crate::ui::Action;
+use crate::ui::central_panel::CentralPanel;
+use crate::ui::modals::ModalLayer;
+use crate::ui::modals::add_category::AddCategoryModal;
+use crate::ui::modals::add_item::AddItemModal;
+use crate::ui::modals::confirm::ConfirmationModal;
+use crate::ui::modals::edit_category::EditCategoryModal;
+use crate::ui::modals::edit_decay::EditDecayModal;
+use crate::ui::modals::edit_item::EditItemModal;
+use crate::ui::side_panel::SidePanel;
 use crate::ui::state::UiState;
-use crate::ui::{central_panel, modals, side_panel};
-use eframe::egui;
 
 fn decay_str_parse(rate_str: &str) -> Result<f64, String> {
     match rate_str.parse::<f64>() {
@@ -16,6 +25,10 @@ fn decay_str_parse(rate_str: &str) -> Result<f64, String> {
 pub struct ScoreTracker {
     data: AppData,
     state: UiState,
+
+    side_panel: SidePanel,
+    central_panel: CentralPanel,
+    modal_layer: ModalLayer,
 }
 
 impl ScoreTracker {
@@ -24,6 +37,10 @@ impl ScoreTracker {
         Self {
             data,
             state: UiState::default(),
+
+            side_panel: SidePanel::new(),
+            central_panel: CentralPanel::new(),
+            modal_layer: ModalLayer::new(),
         }
     }
 
@@ -31,13 +48,13 @@ impl ScoreTracker {
         match action {
             // モーダル表示系
             Action::ShowAddCategoryModal => {
-                self.state.open_add_category_modal();
+                self.modal_layer.open(AddCategoryModal::new());
             }
             Action::ShowAddItemModal(cat_name) => {
-                self.state.open_add_item_modal(cat_name);
+                self.modal_layer.open(AddItemModal::new(cat_name));
             }
             Action::ShowEditCategoryModal(cat_name) => {
-                self.state.open_edit_category_modal(cat_name);
+                self.modal_layer.open(EditCategoryModal::new(cat_name));
             }
             Action::ShowEditItemModal(cat_name, item_name) => {
                 let decay_rate = match self.data.get_item_decay(&cat_name, &item_name) {
@@ -51,21 +68,34 @@ impl ScoreTracker {
                 let mut categories = self.data.categories.keys().cloned().collect::<Vec<_>>();
                 categories.sort();
 
-                self.state
-                    .open_edit_item_modal(cat_name, item_name, decay_rate, categories);
+                self.modal_layer.open(EditItemModal::new(
+                    cat_name, item_name, decay_rate, categories,
+                ));
             }
             Action::ShowEditDecayModal(decay_rate) => {
-                self.state.open_edit_decay_modal(decay_rate);
+                let Some(cat_name) = self.state.selection.current_category.clone() else {
+                    self.modal_layer.close();
+                    return;
+                };
+                let Some(item_name) = self.state.selection.current_item.clone() else {
+                    self.modal_layer.close();
+                    return;
+                };
+
+                self.modal_layer
+                    .open(EditDecayModal::new(cat_name, item_name, decay_rate));
             }
             Action::ShowDeleteCategoryConfirm(cat_name) => {
-                self.state.show_delete_category_confirm_modal(cat_name);
+                self.modal_layer
+                    .open(ConfirmationModal::new_delete_category(cat_name));
             }
             Action::ShowDeleteItemConfirm(cat_name, item_name) => {
-                self.state
-                    .show_delete_item_confirm_modal(cat_name, item_name);
+                self.modal_layer
+                    .open(ConfirmationModal::new_delete_item(cat_name, item_name));
             }
             Action::ShowDeleteScoreConfirm(index) => {
-                self.state.show_delete_score_confirm_modal(index);
+                self.modal_layer
+                    .open(ConfirmationModal::new_delete_score(index));
             }
 
             // データ操作系
@@ -312,9 +342,9 @@ impl ScoreTracker {
 
 impl eframe::App for ScoreTracker {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let side_act = side_panel::draw(ctx, &self.data, &mut self.state);
-        let central_act = central_panel::draw(ctx, &self.data, &mut self.state);
-        let modal_act = modals::show_active_modal(ctx, &mut self.state);
+        let side_act = self.side_panel.show(ctx, &self.data, &mut self.state);
+        let central_act = self.central_panel.show(ctx, &self.data, &mut self.state);
+        let modal_act = self.modal_layer.show(ctx, &mut self.state);
 
         let action = modal_act.or(side_act).or(central_act);
 

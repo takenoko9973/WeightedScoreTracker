@@ -11,6 +11,64 @@ use crate::ui::modals::error::ErrorModal;
 use crate::ui::state::UiState;
 use eframe::egui;
 
+/// モーダル管理
+pub struct ModalLayer {
+    active_modal: Option<Box<dyn Modal>>,
+}
+
+impl ModalLayer {
+    pub fn new() -> Self {
+        Self { active_modal: None }
+    }
+
+    /// モーダルを開く
+    pub fn open<M: Modal + 'static>(&mut self, modal: M) {
+        self.active_modal = Some(Box::new(modal));
+    }
+
+    /// モーダルを閉じる
+    pub fn close(&mut self) {
+        self.active_modal = None;
+    }
+
+    /// 描画処理
+    pub fn show(&mut self, ctx: &egui::Context, state: &mut UiState) -> Option<Action> {
+        let mut action = None;
+        let mut should_close = false;
+
+        // エラーモーダル
+        if let Some(msg) = &state.error_message {
+            let mut error_modal = ErrorModal::new(msg.to_string());
+
+            match error_modal.show(ctx) {
+                ModalResult::KeepOpen => {}
+                ModalResult::Close => {
+                    state.error_message = None;
+                }
+                ModalResult::Dispatch(_) => {}
+            }
+        }
+
+        // 通常モーダル
+        if let Some(modal) = &mut self.active_modal {
+            match modal.show(ctx) {
+                ModalResult::KeepOpen => {}
+                ModalResult::Close => should_close = true,
+                ModalResult::Dispatch(act) => {
+                    action = Some(act);
+                    should_close = true;
+                }
+            }
+        }
+
+        if should_close {
+            self.active_modal = None;
+        }
+
+        action
+    }
+}
+
 /// モーダルの実行結果
 pub enum ModalResult {
     KeepOpen,         // 開いたまま
@@ -21,40 +79,4 @@ pub enum ModalResult {
 /// モーダル用インターフェース
 pub trait Modal {
     fn show(&mut self, ctx: &egui::Context) -> ModalResult;
-}
-
-pub fn show_active_modal(ctx: &egui::Context, state: &mut UiState) -> Option<Action> {
-    let mut action_to_dispatch = None;
-    let mut should_close = false;
-
-    // エラーモーダル
-    if let Some(msg) = &state.error_message {
-        let mut error_modal = ErrorModal::new(msg.to_string());
-
-        match error_modal.show(ctx) {
-            ModalResult::KeepOpen => {}
-            ModalResult::Close => {
-                state.error_message = None;
-            }
-            ModalResult::Dispatch(_) => {}
-        }
-    }
-
-    // 通常モーダル
-    if let Some(modal) = &mut state.active_modal {
-        match modal.show(ctx) {
-            ModalResult::KeepOpen => {}
-            ModalResult::Close => should_close = true,
-            ModalResult::Dispatch(act) => {
-                action_to_dispatch = Some(act);
-                should_close = true;
-            }
-        }
-    }
-
-    if should_close {
-        state.active_modal = None;
-    }
-
-    action_to_dispatch
 }

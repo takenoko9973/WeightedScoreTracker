@@ -67,12 +67,14 @@ impl Modal for ConfirmationModal {
                 ui.add_space(20.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("キャンセル").clicked() {
+                    let delete_button =
+                        ui.button(egui::RichText::new("削除").color(egui::Color32::RED));
+                    let cancel_button = ui.button("キャンセル");
+
+                    if cancel_button.clicked() {
                         result = ModalResult::Close;
                     }
-
-                    if ui.colored_label(egui::Color32::RED, "削除する").clicked() {
-                        // 規定のアクションを返す
+                    if delete_button.clicked() {
                         result = ModalResult::Dispatch(self.ok_action.clone());
                     }
                 });
