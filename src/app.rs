@@ -22,7 +22,7 @@ fn decay_str_parse(rate_str: &str) -> Result<f64, String> {
 }
 
 // アプリケーション状態保存
-pub struct ScoreTracker {
+pub struct WeightedScoreTracker {
     data: AppData,
     state: UiState,
 
@@ -31,7 +31,7 @@ pub struct ScoreTracker {
     modal_layer: ModalLayer,
 }
 
-impl ScoreTracker {
+impl WeightedScoreTracker {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         let data = load_data().unwrap_or_default();
         Self {
@@ -340,7 +340,7 @@ impl ScoreTracker {
     }
 }
 
-impl eframe::App for ScoreTracker {
+impl eframe::App for WeightedScoreTracker {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let side_act = self.side_panel.show(ctx, &self.data, &mut self.state);
         let central_act = self.central_panel.show(ctx, &self.data, &mut self.state);
