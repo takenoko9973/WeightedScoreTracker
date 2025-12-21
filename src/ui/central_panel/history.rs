@@ -1,6 +1,7 @@
+use crate::domain::ScoreEntry;
+use crate::ui::Action;
+use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
-
-use crate::{models::app::ScoreEntry, ui::Action, utils::comma_display::CommaDisplay};
 
 pub struct HistoryList<'a> {
     score_entries: &'a [ScoreEntry],

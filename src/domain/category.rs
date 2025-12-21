@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::models::app::{ItemData, default_created_at};
+use super::{ItemData, default_created_at};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CategoryData {

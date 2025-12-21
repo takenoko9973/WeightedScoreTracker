@@ -1,6 +1,5 @@
-use eframe::egui;
-
 use crate::constants::{FONT_PATHS, FONT_SCALE};
+use eframe::egui;
 
 pub fn setup_custom_fonts(ctx: &egui::Context) {
     // 現在のフォント設定を取得

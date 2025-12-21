@@ -1,8 +1,6 @@
 use super::{Modal, ModalResult};
-use crate::{
-    constants::{DEFAULT_DECAY_RATE, MAX_DECAY_RATE, MIN_DECAY_RATE},
-    ui::Action,
-};
+use crate::constants::{DEFAULT_DECAY_RATE, MAX_DECAY_RATE, MIN_DECAY_RATE};
+use crate::ui::Action;
 use eframe::egui;
 
 // 必要なデータはすべてフィールドとして持つ！
