@@ -3,8 +3,8 @@
 
 mod app;
 mod constants;
+mod domain;
 mod logic;
-mod models;
 mod persistence;
 mod ui;
 mod utils;

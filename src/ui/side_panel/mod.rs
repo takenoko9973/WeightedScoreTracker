@@ -1,10 +1,9 @@
 pub mod category_list;
 
-use eframe::egui;
-
-use crate::models::app::AppData;
+use crate::domain::AppData;
 use crate::ui::Action;
 use crate::ui::state::UiState;
+use eframe::egui;
 
 pub struct SidePanel {}
 

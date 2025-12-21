@@ -2,16 +2,15 @@ mod chart;
 mod history;
 mod input;
 
-use eframe::egui::{self};
-
+use crate::domain::{AppData, ItemData};
 use crate::logic::calculate_stats;
-use crate::models::app::{AppData, ItemData};
 use crate::ui::Action;
 use crate::ui::central_panel::chart::WeightedScoreChart;
 use crate::ui::central_panel::history::HistoryList;
 use crate::ui::central_panel::input::ScoreInput;
 use crate::ui::state::UiState;
 use crate::utils::comma_display::CommaDisplay;
+use eframe::egui::{self};
 
 pub struct CentralPanel {
     selected_index: Option<usize>,

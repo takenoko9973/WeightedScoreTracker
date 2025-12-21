@@ -1,6 +1,5 @@
-use eframe::egui;
-
 use crate::ui::modals::{Modal, ModalResult};
+use eframe::egui;
 
 pub struct ErrorModal {
     error_msg: String,

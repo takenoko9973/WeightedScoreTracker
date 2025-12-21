@@ -1,6 +1,4 @@
-use eframe::egui;
-
-use crate::models::app::AppData;
+use crate::domain::AppData;
 use crate::persistence::{load_data, save_data};
 use crate::ui::Action;
 use crate::ui::central_panel::CentralPanel;
@@ -13,6 +11,7 @@ use crate::ui::modals::edit_decay::EditDecayModal;
 use crate::ui::modals::edit_item::EditItemModal;
 use crate::ui::side_panel::SidePanel;
 use crate::ui::state::UiState;
+use eframe::egui;
 
 fn decay_str_parse(rate_str: &str) -> Result<f64, String> {
     match rate_str.parse::<f64>() {
