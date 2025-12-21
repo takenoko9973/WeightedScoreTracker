@@ -13,6 +13,8 @@ use crate::utils::comma_display::CommaDisplay;
 use eframe::egui::{self};
 
 pub struct CentralPanel {
+    score_input_text: String,
+
     selected_index: Option<usize>,
     scroll_req_index: Option<usize>,
 }
@@ -20,6 +22,8 @@ pub struct CentralPanel {
 impl CentralPanel {
     pub fn new() -> Self {
         Self {
+            score_input_text: String::new(),
+
             selected_index: None,   // 選択中インデックス
             scroll_req_index: None, // リストに対するスクロール処理用インデックス
         }
@@ -77,7 +81,8 @@ impl CentralPanel {
                             .spacing([20.0, 0.0])
                             .show(ui, |ui| {
                                 // 左カラム: 入力
-                                let input_action = ScoreInput::new().show(ui);
+                                let input_action =
+                                    ScoreInput::new().show(ui, &mut self.score_input_text);
                                 // 右カラム: 履歴
                                 let history_action = HistoryList::new(&item_data.scores).show(
                                     ui,
