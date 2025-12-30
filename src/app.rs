@@ -132,7 +132,7 @@ impl WeightedScoreTracker {
         self.state.selection.current_item = Some(item);
 
         // カテゴリが変わったら入力欄と選択状態をリセット
-        self.state.selection.input_score.clear();
+        self.central_panel.clear_input();
         self.state.selection.selected_history_index = None;
     }
 
@@ -207,7 +207,7 @@ impl WeightedScoreTracker {
         // 追加処理（マイナスチェックなどはモデル内で実行）
         match self.data.add_score(cat, item, score) {
             Ok(_) => {
-                self.state.selection.input_score.clear();
+                self.central_panel.clear_input();
                 self.save_to_file();
             }
             Err(msg) => self.state.error_message = Some(msg),

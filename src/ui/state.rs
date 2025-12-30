@@ -6,7 +6,6 @@ pub struct SelectionState {
     pub current_category: Option<String>,
     pub current_item: Option<String>,
     pub selected_history_index: Option<usize>,
-    pub input_score: String,
 }
 
 #[derive(Default)]
