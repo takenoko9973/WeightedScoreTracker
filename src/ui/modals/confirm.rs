@@ -1,7 +1,6 @@
-use eframe::egui;
-
 use super::{Modal, ModalResult};
-use crate::ui::Action;
+use crate::action::Action;
+use eframe::egui;
 
 pub struct ConfirmationModal {
     title: String,

@@ -2,7 +2,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::models::app::{CategoryData, ItemData};
+use super::{CategoryData, ItemData};
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct AppData {

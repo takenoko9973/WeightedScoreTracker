@@ -1,10 +1,7 @@
+use crate::constants::PLOT_WEIGHT_THRESHOLD;
+use crate::domain::ScoreEntry;
+use crate::utils::weighted_statistics::{weighted_mean, weighted_std};
 use std::iter::zip;
-
-use crate::{
-    constants::PLOT_WEIGHT_THRESHOLD,
-    models::app::ScoreEntry,
-    utils::weighted_statics::{weighted_mean, weighted_std},
-};
 
 fn generate_weight(decay_rate: f64, n: usize) -> Vec<f64> {
     (0..n)

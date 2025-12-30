@@ -1,19 +1,20 @@
 mod chart;
 mod history;
-mod input;
+mod score_input;
 
-use eframe::egui::{self};
-
+use crate::action::Action;
+use crate::domain::{AppData, ItemData};
 use crate::logic::calculate_stats;
-use crate::models::app::{AppData, ItemData};
-use crate::ui::Action;
 use crate::ui::central_panel::chart::WeightedScoreChart;
 use crate::ui::central_panel::history::HistoryList;
-use crate::ui::central_panel::input::ScoreInput;
+use crate::ui::central_panel::score_input::ScoreInput;
 use crate::ui::state::UiState;
 use crate::utils::comma_display::CommaDisplay;
+use eframe::egui::{self};
 
 pub struct CentralPanel {
+    score_input_text: String,
+
     selected_index: Option<usize>,
     scroll_req_index: Option<usize>,
 }
@@ -21,6 +22,8 @@ pub struct CentralPanel {
 impl CentralPanel {
     pub fn new() -> Self {
         Self {
+            score_input_text: String::new(),
+
             selected_index: None,   // 選択中インデックス
             scroll_req_index: None, // リストに対するスクロール処理用インデックス
         }
@@ -31,9 +34,15 @@ impl CentralPanel {
         ctx: &egui::Context,
         data: &AppData,
         state: &mut UiState,
+        enabled: bool,
     ) -> Option<Action> {
         egui::CentralPanel::default()
             .show(ctx, |ui| {
+                if !enabled {
+                    // UIの無効化
+                    ui.disable();
+                }
+
                 // カテゴリ未選択
                 let (Some(cat_name), Some(item_name)) = (
                     &state.selection.current_category,
@@ -78,7 +87,8 @@ impl CentralPanel {
                             .spacing([20.0, 0.0])
                             .show(ui, |ui| {
                                 // 左カラム: 入力
-                                let input_action = ScoreInput::new().show(ui);
+                                let input_action =
+                                    ScoreInput::new().show(ui, &mut self.score_input_text);
                                 // 右カラム: 履歴
                                 let history_action = HistoryList::new(&item_data.scores).show(
                                     ui,
@@ -120,5 +130,9 @@ impl CentralPanel {
         });
 
         action
+    }
+
+    pub fn clear_input(&mut self) {
+        self.score_input_text.clear();
     }
 }

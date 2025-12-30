@@ -6,7 +6,7 @@ pub mod edit_decay;
 pub mod edit_item;
 pub mod error;
 
-use crate::ui::Action;
+use crate::action::Action;
 use crate::ui::modals::error::ErrorModal;
 use crate::ui::state::UiState;
 use eframe::egui;
@@ -66,6 +66,11 @@ impl ModalLayer {
         }
 
         action
+    }
+
+    /// モーダルが開いているかどうか
+    pub fn is_open(&self) -> bool {
+        self.active_modal.is_some()
     }
 }
 

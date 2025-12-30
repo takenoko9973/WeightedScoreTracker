@@ -1,10 +1,11 @@
 // リリースビルドでコンソール非表示
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod action;
 mod app;
 mod constants;
+mod domain;
 mod logic;
-mod models;
 mod persistence;
 mod ui;
 mod utils;

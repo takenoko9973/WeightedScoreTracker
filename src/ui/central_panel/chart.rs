@@ -1,6 +1,6 @@
 use crate::constants::BAR_BASE_COLOR;
+use crate::domain::ScoreEntry;
 use crate::logic::{PlotParams, calculate_plot_params, calculate_stats};
-use crate::models::app::ScoreEntry;
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
 use egui_plot::{Bar, BarChart, Corner, Legend, Plot};

@@ -1,8 +1,6 @@
-use eframe::egui;
-
-use crate::models::app::AppData;
+use crate::action::Action;
+use crate::domain::AppData;
 use crate::persistence::{load_data, save_data};
-use crate::ui::Action;
 use crate::ui::central_panel::CentralPanel;
 use crate::ui::modals::ModalLayer;
 use crate::ui::modals::add_category::AddCategoryModal;
@@ -13,6 +11,7 @@ use crate::ui::modals::edit_decay::EditDecayModal;
 use crate::ui::modals::edit_item::EditItemModal;
 use crate::ui::side_panel::SidePanel;
 use crate::ui::state::UiState;
+use eframe::egui;
 
 fn decay_str_parse(rate_str: &str) -> Result<f64, String> {
     match rate_str.parse::<f64>() {
@@ -133,7 +132,7 @@ impl WeightedScoreTracker {
         self.state.selection.current_item = Some(item);
 
         // カテゴリが変わったら入力欄と選択状態をリセット
-        self.state.selection.input_score.clear();
+        self.central_panel.clear_input();
         self.state.selection.selected_history_index = None;
     }
 
@@ -208,7 +207,7 @@ impl WeightedScoreTracker {
         // 追加処理（マイナスチェックなどはモデル内で実行）
         match self.data.add_score(cat, item, score) {
             Ok(_) => {
-                self.state.selection.input_score.clear();
+                self.central_panel.clear_input();
                 self.save_to_file();
             }
             Err(msg) => self.state.error_message = Some(msg),
@@ -342,8 +341,17 @@ impl WeightedScoreTracker {
 
 impl eframe::App for WeightedScoreTracker {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let side_act = self.side_panel.show(ctx, &self.data, &mut self.state);
-        let central_act = self.central_panel.show(ctx, &self.data, &mut self.state);
+        // モーダルが開いているかどうか（通常モーダル or エラーメッセージ）
+        let is_modal_open = self.modal_layer.is_open() || self.state.error_message.is_some();
+        let is_panel_enabled = !is_modal_open; // 開いている場合は無効化
+
+        let side_act = self
+            .side_panel
+            .show(ctx, &self.data, &mut self.state, is_panel_enabled);
+        let central_act =
+            self.central_panel
+                .show(ctx, &self.data, &mut self.state, is_panel_enabled);
+
         let modal_act = self.modal_layer.show(ctx, &mut self.state);
 
         let action = modal_act.or(side_act).or(central_act);
