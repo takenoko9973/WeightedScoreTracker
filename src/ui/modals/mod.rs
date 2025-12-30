@@ -67,6 +67,11 @@ impl ModalLayer {
 
         action
     }
+
+    /// モーダルが開いているかどうか
+    pub fn is_open(&self) -> bool {
+        self.active_modal.is_some()
+    }
 }
 
 /// モーダルの実行結果

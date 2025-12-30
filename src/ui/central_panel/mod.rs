@@ -34,9 +34,15 @@ impl CentralPanel {
         ctx: &egui::Context,
         data: &AppData,
         state: &mut UiState,
+        enabled: bool,
     ) -> Option<Action> {
         egui::CentralPanel::default()
             .show(ctx, |ui| {
+                if !enabled {
+                    // UIの無効化
+                    ui.disable();
+                }
+
                 // カテゴリ未選択
                 let (Some(cat_name), Some(item_name)) = (
                     &state.selection.current_category,
@@ -124,5 +130,9 @@ impl CentralPanel {
         });
 
         action
+    }
+
+    pub fn clear_input(&mut self) {
+        self.score_input_text.clear();
     }
 }

@@ -341,8 +341,17 @@ impl WeightedScoreTracker {
 
 impl eframe::App for WeightedScoreTracker {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let side_act = self.side_panel.show(ctx, &self.data, &mut self.state);
-        let central_act = self.central_panel.show(ctx, &self.data, &mut self.state);
+        // モーダルが開いているかどうか（通常モーダル or エラーメッセージ）
+        let is_modal_open = self.modal_layer.is_open() || self.state.error_message.is_some();
+        let is_panel_enabled = !is_modal_open; // 開いている場合は無効化
+
+        let side_act = self
+            .side_panel
+            .show(ctx, &self.data, &mut self.state, is_panel_enabled);
+        let central_act =
+            self.central_panel
+                .show(ctx, &self.data, &mut self.state, is_panel_enabled);
+
         let modal_act = self.modal_layer.show(ctx, &mut self.state);
 
         let action = modal_act.or(side_act).or(central_act);

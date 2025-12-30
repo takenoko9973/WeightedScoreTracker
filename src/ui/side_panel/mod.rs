@@ -17,12 +17,18 @@ impl SidePanel {
         ctx: &egui::Context,
         data: &AppData,
         state: &mut UiState,
+        enabled: bool,
     ) -> Option<Action> {
         let mut action = None;
 
         egui::SidePanel::left("side_panel")
             .resizable(true)
             .show(ctx, |ui| {
+                if !enabled {
+                    // UIの無効化
+                    ui.disable();
+                }
+
                 // 上下に要素を先に配置
                 egui::TopBottomPanel::top("header_panel").show_inside(ui, |ui| {
                     ui.heading("カテゴリ一覧");
