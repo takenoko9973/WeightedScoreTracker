@@ -1,13 +1,13 @@
 mod chart;
 mod history;
-mod input;
+mod score_input;
 
+use crate::action::Action;
 use crate::domain::{AppData, ItemData};
 use crate::logic::calculate_stats;
-use crate::ui::Action;
 use crate::ui::central_panel::chart::WeightedScoreChart;
 use crate::ui::central_panel::history::HistoryList;
-use crate::ui::central_panel::input::ScoreInput;
+use crate::ui::central_panel::score_input::ScoreInput;
 use crate::ui::state::UiState;
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui::{self};

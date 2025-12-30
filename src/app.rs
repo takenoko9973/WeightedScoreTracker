@@ -1,6 +1,6 @@
+use crate::action::Action;
 use crate::domain::AppData;
 use crate::persistence::{load_data, save_data};
-use crate::ui::Action;
 use crate::ui::central_panel::CentralPanel;
 use crate::ui::modals::ModalLayer;
 use crate::ui::modals::add_category::AddCategoryModal;

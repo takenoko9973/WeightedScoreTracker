@@ -1,5 +1,6 @@
-use crate::ui::Action;
 use eframe::egui;
+
+use crate::action::Action;
 
 pub struct ScoreInput;
 

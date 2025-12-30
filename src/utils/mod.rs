@@ -1,2 +1,2 @@
 pub mod comma_display;
-pub mod weighted_statics;
+pub mod weighted_statistics;

@@ -1,5 +1,5 @@
+use crate::action::Action;
 use crate::domain::ScoreEntry;
-use crate::ui::Action;
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
 

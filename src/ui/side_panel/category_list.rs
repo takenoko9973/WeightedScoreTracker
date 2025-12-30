@@ -1,5 +1,5 @@
+use crate::action::Action;
 use crate::domain::{AppData, CategoryData};
-use crate::ui::Action;
 use crate::ui::state::SelectionState;
 use eframe::egui::{self, UiKind};
 

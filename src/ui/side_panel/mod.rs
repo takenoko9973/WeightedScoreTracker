@@ -1,7 +1,7 @@
 pub mod category_list;
 
+use crate::action::Action;
 use crate::domain::AppData;
-use crate::ui::Action;
 use crate::ui::state::UiState;
 use eframe::egui;
 

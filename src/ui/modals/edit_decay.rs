@@ -1,6 +1,6 @@
 use super::{Modal, ModalResult};
+use crate::action::Action;
 use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
-use crate::ui::Action;
 use eframe::egui;
 
 pub struct EditDecayModal {
