@@ -26,7 +26,8 @@ pub fn calculate_stats(scores: &[ScoreEntry], decay_rate: f64) -> (f64, f64, usi
 }
 
 pub struct PlotParams {
-    pub bar_base: f64,
+    pub max_y: f64,
+    pub min_y: f64,
 }
 
 fn filtered_scores(scores: &[ScoreEntry], weights: &[f64], threshold: f64) -> Option<Vec<i64>> {
@@ -44,12 +45,13 @@ pub fn calculate_plot_params(scores: &[ScoreEntry], weights: &[f64]) -> PlotPara
         .unwrap_or_else(|| scores.iter().map(|s| s.score).collect());
 
     let min_score = *relevant_scores.iter().min().unwrap_or(&0);
-    let max_score = *relevant_scores.iter().max().unwrap_or(&i64::MAX);
+    let max_score = *relevant_scores.iter().max().unwrap_or(&0);
 
     // 余白計算
     let range = (max_score - min_score) as f64;
-    let padding = range * 0.5;
-    let bar_base = (min_score as f64 - padding).max(0.0);
+    let padding = range * 0.1;
+    let max_y = max_score as f64 + padding;
+    let min_y = (min_score as f64 - padding).max(0.0);
 
-    PlotParams { bar_base }
+    PlotParams { max_y, min_y }
 }
