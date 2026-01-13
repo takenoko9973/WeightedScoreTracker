@@ -1,5 +1,5 @@
 use super::{Modal, ModalResult};
-use crate::action::Action;
+use crate::{action::Action, utils::ime::ImeFocusExtension};
 use eframe::egui;
 
 pub struct EditCategoryModal {
@@ -26,9 +26,13 @@ impl Modal for EditCategoryModal {
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
                 ui.label(format!("対象: {}", self.target_cat));
+
                 ui.label("新しい名前:");
-                ui.text_edit_singleline(&mut self.input_cat);
+                let res = ui.text_edit_singleline(&mut self.input_cat);
+                res.handle_ime_focus(ui);
+
                 ui.add_space(10.0);
+
                 ui.horizontal(|ui| {
                     if ui.button("変更").clicked() {
                         result = ModalResult::Dispatch(Action::RenameCategory(

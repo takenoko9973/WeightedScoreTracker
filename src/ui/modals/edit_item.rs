@@ -1,6 +1,7 @@
 use super::{Modal, ModalResult};
 use crate::action::Action;
 use crate::constants::MIN_DECAY_RATE;
+use crate::utils::ime::ImeFocusExtension;
 use eframe::egui;
 
 pub struct EditItemModal {
@@ -56,7 +57,8 @@ impl Modal for EditItemModal {
                         ui.end_row();
 
                         ui.label("項目名:");
-                        ui.text_edit_singleline(&mut self.input_item);
+                        let res = ui.text_edit_singleline(&mut self.input_cat);
+                        res.handle_ime_focus(ui);
                         ui.end_row();
 
                         ui.label("減衰率:");

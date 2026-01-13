@@ -1,6 +1,7 @@
 use super::{Modal, ModalResult};
 use crate::action::Action;
 use crate::constants::{DEFAULT_DECAY_RATE, MAX_DECAY_RATE, MIN_DECAY_RATE};
+use crate::utils::ime::ImeFocusExtension;
 use eframe::egui;
 
 // 必要なデータはすべてフィールドとして持つ！
@@ -34,7 +35,8 @@ impl Modal for AddItemModal {
                 ui.label(format!("追加先カテゴリ: {}", self.target_cat));
 
                 ui.label("項目名:");
-                ui.text_edit_singleline(&mut self.input_item);
+                let res = ui.text_edit_singleline(&mut self.input_item);
+                res.handle_ime_focus(ui);
 
                 ui.label(format!(
                     "減衰率 ({:.2} - {:.2}):",
