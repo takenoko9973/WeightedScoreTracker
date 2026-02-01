@@ -1,12 +1,5 @@
+use crate::domain::SelectionState;
 use crate::ui::modals::Modal;
-
-/// メイン画面での選択・入力状態
-#[derive(Default)]
-pub struct SelectionState {
-    pub current_category: Option<String>,
-    pub current_item: Option<String>,
-    pub selected_history_index: Option<usize>,
-}
 
 #[derive(Default)]
 pub struct UiState {

@@ -44,10 +44,9 @@ impl CentralPanel {
                 }
 
                 // カテゴリ未選択
-                let (Some(cat_name), Some(item_name)) = (
-                    &state.selection.current_category,
-                    &state.selection.current_item,
-                ) else {
+                let (Some(cat_name), Some(item_name)) =
+                    (&state.selection.category, &state.selection.item)
+                else {
                     ui.centered_and_justified(|ui| {
                         ui.label("左のリストから項目を選択するか、追加してください");
                     });

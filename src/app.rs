@@ -72,11 +72,11 @@ impl WeightedScoreTracker {
                 ));
             }
             Action::ShowEditDecayModal(decay_rate) => {
-                let Some(cat_name) = self.state.selection.current_category.clone() else {
+                let Some(cat_name) = self.state.selection.category.clone() else {
                     self.modal_layer.close();
                     return;
                 };
-                let Some(item_name) = self.state.selection.current_item.clone() else {
+                let Some(item_name) = self.state.selection.item.clone() else {
                     self.modal_layer.close();
                     return;
                 };
@@ -128,12 +128,12 @@ impl WeightedScoreTracker {
 
     /// 項目選択
     fn select_item(&mut self, cat: String, item: String) {
-        self.state.selection.current_category = Some(cat);
-        self.state.selection.current_item = Some(item);
-
         // カテゴリが変わったら入力欄と選択状態をリセット
+        self.state.selection.clear();
         self.central_panel.clear_input();
-        self.state.selection.selected_history_index = None;
+
+        self.state.selection.category = Some(cat);
+        self.state.selection.item = Some(item);
     }
 
     /// カテゴリ登録
@@ -156,8 +156,8 @@ impl WeightedScoreTracker {
 
         match self.data.rename_category(&old_name, new_name.clone()) {
             Ok(_) => {
-                if self.state.selection.current_category.as_ref() == Some(&old_name) {
-                    self.state.selection.current_category = Some(new_name);
+                if self.state.selection.category.as_ref() == Some(&old_name) {
+                    self.state.selection.category = Some(new_name);
                 }
                 self.save_to_file();
                 self.state.active_modal = None;
@@ -189,10 +189,8 @@ impl WeightedScoreTracker {
 
     /// スコア追加
     fn add_score(&mut self, text: String) {
-        let (Some(cat), Some(item)) = (
-            &self.state.selection.current_category,
-            &self.state.selection.current_item,
-        ) else {
+        let (Some(cat), Some(item)) = (&self.state.selection.category, &self.state.selection.item)
+        else {
             return;
         };
 
@@ -240,11 +238,11 @@ impl WeightedScoreTracker {
                 self.data = temp_data; // 成功した場合はシミュレーション結果に上書き
 
                 // 選択状態の追従 : もし編集していた項目を選択中だったら、選択情報を更新する
-                if self.state.selection.current_category.as_ref() == Some(&old_cat)
-                    && self.state.selection.current_item.as_ref() == Some(&old_item)
+                if self.state.selection.category.as_ref() == Some(&old_cat)
+                    && self.state.selection.item.as_ref() == Some(&old_item)
                 {
-                    self.state.selection.current_category = Some(new_cat);
-                    self.state.selection.current_item = Some(new_item);
+                    self.state.selection.category = Some(new_cat);
+                    self.state.selection.item = Some(new_item);
                 }
 
                 self.save_to_file();
@@ -256,10 +254,8 @@ impl WeightedScoreTracker {
 
     /// 減衰率変更
     fn update_decay_rate(&mut self, decay_str: String) {
-        let (Some(cat), Some(item)) = (
-            &self.state.selection.current_category,
-            &self.state.selection.current_item,
-        ) else {
+        let (Some(cat), Some(item)) = (&self.state.selection.category, &self.state.selection.item)
+        else {
             return;
         };
 
@@ -285,9 +281,8 @@ impl WeightedScoreTracker {
         // モデルの処理を呼び出し、結果で分岐
         match self.data.remove_category(&name) {
             Ok(_) => {
-                if self.state.selection.current_category.as_ref() == Some(&name) {
-                    self.state.selection.current_category = None;
-                    self.state.selection.current_item = None;
+                if self.state.selection.category.as_ref() == Some(&name) {
+                    self.state.selection.clear();
                 }
                 self.save_to_file();
                 self.state.active_modal = None;
@@ -302,11 +297,11 @@ impl WeightedScoreTracker {
     fn execute_delete_item(&mut self, cat: String, item: String) {
         match self.data.remove_item(&cat, &item) {
             Ok(_) => {
-                if self.state.selection.current_category.as_ref() == Some(&cat)
-                    && self.state.selection.current_item.as_ref() == Some(&item)
+                if self.state.selection.category.as_ref() == Some(&cat)
+                    && self.state.selection.item.as_ref() == Some(&item)
                 {
-                    self.state.selection.current_item = None;
-                    self.state.selection.selected_history_index = None;
+                    self.state.selection.item = None;
+                    self.state.selection.history_index = None;
                 }
                 self.save_to_file();
                 self.state.active_modal = None;
@@ -319,16 +314,14 @@ impl WeightedScoreTracker {
 
     /// スコア削除
     fn execute_delete_score(&mut self, idx: usize) {
-        let (Some(cat), Some(item)) = (
-            &self.state.selection.current_category,
-            &self.state.selection.current_item,
-        ) else {
+        let (Some(cat), Some(item)) = (&self.state.selection.category, &self.state.selection.item)
+        else {
             return;
         };
 
         match self.data.remove_score(cat, item, idx) {
             Ok(_) => {
-                self.state.selection.selected_history_index = None;
+                self.state.selection.history_index = None;
                 self.save_to_file();
                 self.state.active_modal = None;
             }

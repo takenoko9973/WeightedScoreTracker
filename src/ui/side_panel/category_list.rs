@@ -1,6 +1,5 @@
 use crate::action::Action;
-use crate::domain::{AppData, CategoryData};
-use crate::ui::state::SelectionState;
+use crate::domain::{AppData, CategoryData, SelectionState};
 use eframe::egui::{self, UiKind};
 
 /// カテゴリリスト描画のエントリーポイント
@@ -99,8 +98,8 @@ fn draw_single_item(
 ) -> Option<Action> {
     let mut action = None;
 
-    let is_selected = selection.current_category.as_deref() == Some(cat_name)
-        && selection.current_item.as_deref() == Some(item_name);
+    let is_selected = selection.category.as_deref() == Some(cat_name)
+        && selection.item.as_deref() == Some(item_name);
 
     let response = ui.selectable_label(is_selected, item_name);
 
