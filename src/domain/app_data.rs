@@ -54,13 +54,6 @@ impl AppData {
         self.categories.contains_key(cat)
     }
 
-    /// 項目存在確認
-    pub fn item_exists(&self, cat: &str, item: &str) -> bool {
-        self.get_category(cat)
-            .map(|cat| cat.item_exists(item))
-            .unwrap_or(false)
-    }
-
     // =======================================================================================
 
     /// 新しいカテゴリを追加
@@ -146,25 +139,14 @@ impl AppData {
             return Ok(());
         }
 
-        if !self.category_exists(old_cat) {
-            return Err(format!("移動元のカテゴリ「{}」が存在しません。", old_cat));
-        }
-        if !self.category_exists(new_cat) {
-            return Err(format!("移動先のカテゴリ「{}」が存在しません。", new_cat));
-        }
-        if self.item_exists(new_cat, item) {
-            return Err(format!(
-                "カテゴリ「{}」内に項目「{}」は既に存在します。",
-                new_cat, item
-            ));
-        }
-
         let item_data = self.get_category_mut(old_cat)?.remove_item(item)?;
 
-        self.get_category_mut(new_cat)?
-            .items
-            .insert(item.to_string(), item_data);
+        let target_cat = self.get_category_mut(new_cat)?;
+        if target_cat.item_exists(item) {
+            return Err(format!("移動先に同名の項目が存在します: {}", item));
+        }
 
+        target_cat.items.insert(item.to_string(), item_data);
         Ok(())
     }
 
