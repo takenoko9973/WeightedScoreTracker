@@ -3,12 +3,11 @@ mod history;
 mod score_input;
 
 use crate::action::Action;
-use crate::domain::{AppData, ItemData};
+use crate::domain::{ItemData, TrackerModel};
 use crate::logic::calculate_stats;
 use crate::ui::central_panel::chart::WeightedScoreChart;
 use crate::ui::central_panel::history::HistoryList;
 use crate::ui::central_panel::score_input::ScoreInput;
-use crate::ui::state::UiState;
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui::{self};
 
@@ -32,8 +31,7 @@ impl CentralPanel {
     pub fn show(
         &mut self,
         ctx: &egui::Context,
-        data: &AppData,
-        state: &mut UiState,
+        model: &TrackerModel,
         enabled: bool,
     ) -> Option<Action> {
         egui::CentralPanel::default()
@@ -44,10 +42,9 @@ impl CentralPanel {
                 }
 
                 // カテゴリ未選択
-                let (Some(cat_name), Some(item_name)) = (
-                    &state.selection.current_category,
-                    &state.selection.current_item,
-                ) else {
+                let (Some(cat_name), Some(item_name)) =
+                    (&model.selection.category, &model.selection.item)
+                else {
                     ui.centered_and_justified(|ui| {
                         ui.label("左のリストから項目を選択するか、追加してください");
                     });
@@ -55,7 +52,7 @@ impl CentralPanel {
                 };
 
                 // データ取得
-                let Ok(item_data) = data.get_item(cat_name, item_name) else {
+                let Ok(item_data) = model.data.get_item(cat_name, item_name) else {
                     ui.label("項目データ読み込みエラー");
                     return None;
                 };

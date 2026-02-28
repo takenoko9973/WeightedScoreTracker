@@ -1,6 +1,7 @@
 use crate::action::Action;
-use crate::domain::AppData;
-use crate::persistence::{load_data, save_data};
+use crate::application::TrackerService;
+use crate::constants::DATA_FILENAME;
+use crate::infrastructure::JsonFileStore;
 use crate::ui::central_panel::CentralPanel;
 use crate::ui::modals::ModalLayer;
 use crate::ui::modals::add_category::AddCategoryModal;
@@ -13,16 +14,9 @@ use crate::ui::side_panel::SidePanel;
 use crate::ui::state::UiState;
 use eframe::egui;
 
-fn decay_str_parse(rate_str: &str) -> Result<f64, String> {
-    match rate_str.parse::<f64>() {
-        Ok(v) => Ok(v),
-        Err(_) => Err("有効な数値を入力してください。".to_string()),
-    }
-}
-
 // アプリケーション状態保存
 pub struct WeightedScoreTracker {
-    data: AppData,
+    service: TrackerService<JsonFileStore>,
     state: UiState,
 
     side_panel: SidePanel,
@@ -32,10 +26,19 @@ pub struct WeightedScoreTracker {
 
 impl WeightedScoreTracker {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let data = load_data().unwrap_or_default();
+        let mut state = UiState::default();
+
+        let service = match TrackerService::new(JsonFileStore::new(DATA_FILENAME)) {
+            Ok(service) => service,
+            Err(err) => {
+                state.error_message = Some(err.to_string());
+                TrackerService::empty(JsonFileStore::new(DATA_FILENAME))
+            }
+        };
+
         Self {
-            data,
-            state: UiState::default(),
+            service,
+            state,
 
             side_panel: SidePanel::new(),
             central_panel: CentralPanel::new(),
@@ -56,28 +59,32 @@ impl WeightedScoreTracker {
                 self.modal_layer.open(EditCategoryModal::new(cat_name));
             }
             Action::ShowEditItemModal(cat_name, item_name) => {
-                let decay_rate = match self.data.get_item_decay(&cat_name, &item_name) {
-                    Ok(item) => item,
-                    Err(msg) => {
-                        self.state.error_message = Some(msg);
-                        return;
+                // モデルからデータを取得してモーダルに渡す
+                match self.service.model().get_item(&cat_name, &item_name) {
+                    Ok(item) => {
+                        let decay_rate = item.decay_rate;
+                        let mut categories: Vec<_> = self
+                            .service
+                            .model()
+                            .data
+                            .categories
+                            .keys()
+                            .cloned()
+                            .collect();
+                        categories.sort();
+
+                        self.modal_layer.open(EditItemModal::new(
+                            cat_name, item_name, decay_rate, categories,
+                        ));
                     }
-                };
-
-                let mut categories = self.data.categories.keys().cloned().collect::<Vec<_>>();
-                categories.sort();
-
-                self.modal_layer.open(EditItemModal::new(
-                    cat_name, item_name, decay_rate, categories,
-                ));
+                    Err(e) => self.state.error_message = Some(e.to_string()),
+                }
             }
             Action::ShowEditDecayModal(decay_rate) => {
-                let Some(cat_name) = self.state.selection.current_category.clone() else {
-                    self.modal_layer.close();
+                let Some(cat_name) = self.service.model().selection.category.clone() else {
                     return;
                 };
-                let Some(item_name) = self.state.selection.current_item.clone() else {
-                    self.modal_layer.close();
+                let Some(item_name) = self.service.model().selection.item.clone() else {
                     return;
                 };
 
@@ -98,7 +105,12 @@ impl WeightedScoreTracker {
             }
 
             // データ操作系
-            Action::SelectItem(cat, item) => self.select_item(cat, item),
+            Action::SelectItem(cat, item) => {
+                self.service.select_item(cat, item);
+
+                // カテゴリが変わったら入力欄をリセット
+                self.central_panel.clear_input();
+            }
             Action::AddCategory(name) => self.add_category(name),
             Action::RenameCategory(old_name, new_name) => self.rename_category(old_name, new_name),
             Action::AddItem(cat, name, decay) => self.add_item(cat, name, decay),
@@ -114,103 +126,37 @@ impl WeightedScoreTracker {
     }
 
     // ======================================
-    // 共通処理
-    // ======================================
-    fn save_to_file(&mut self) {
-        if let Err(e) = save_data(&self.data) {
-            self.state.error_message = Some(format!("保存に失敗しました: {}", e));
-        }
-    }
-
-    // ======================================
     // データ操作
     // ======================================
 
-    /// 項目選択
-    fn select_item(&mut self, cat: String, item: String) {
-        self.state.selection.current_category = Some(cat);
-        self.state.selection.current_item = Some(item);
-
-        // カテゴリが変わったら入力欄と選択状態をリセット
-        self.central_panel.clear_input();
-        self.state.selection.selected_history_index = None;
-    }
-
     /// カテゴリ登録
     fn add_category(&mut self, name: String) {
-        match self.data.add_category(name) {
-            Ok(_) => {
-                self.save_to_file();
-                self.state.active_modal = None;
-            }
-            Err(msg) => self.state.error_message = Some(msg),
+        if let Err(err) = self.service.add_category(name) {
+            self.state.error_message = Some(err.to_string());
         }
     }
 
     /// カテゴリ名変更
     fn rename_category(&mut self, old_name: String, new_name: String) {
-        if old_name == new_name {
-            self.state.active_modal = None;
-            return;
-        }
-
-        match self.data.rename_category(&old_name, new_name.clone()) {
-            Ok(_) => {
-                if self.state.selection.current_category.as_ref() == Some(&old_name) {
-                    self.state.selection.current_category = Some(new_name);
-                }
-                self.save_to_file();
-                self.state.active_modal = None;
-            }
-            Err(msg) => self.state.error_message = Some(msg),
+        if let Err(err) = self.service.rename_category(&old_name, new_name) {
+            self.state.error_message = Some(err.to_string());
         }
     }
 
     /// 項目追加
     fn add_item(&mut self, cat_name: String, name: String, decay_str: String) {
-        // UI層で変換を行う
-        let decay_rate = match decay_str.parse::<f64>() {
-            Ok(v) => v,
-            Err(_) => {
-                self.state.error_message =
-                    Some("減衰率には有効な数値を入力してください。".to_string());
-                return;
-            }
-        };
-
-        match self.data.add_item(&cat_name, name, decay_rate) {
-            Ok(_) => {
-                self.save_to_file();
-                self.state.active_modal = None;
-            }
-            Err(msg) => self.state.error_message = Some(msg),
+        if let Err(err) = self.service.add_item(&cat_name, name, &decay_str) {
+            self.state.error_message = Some(err.to_string());
         }
     }
 
     /// スコア追加
     fn add_score(&mut self, text: String) {
-        let (Some(cat), Some(item)) = (
-            &self.state.selection.current_category,
-            &self.state.selection.current_item,
-        ) else {
-            return;
-        };
-
-        let score = match text.parse::<i64>() {
-            Ok(v) => v,
-            Err(_) => {
-                self.state.error_message = Some("スコアには整数値を入力してください。".to_string());
-                return;
-            }
-        };
-
-        // 追加処理（マイナスチェックなどはモデル内で実行）
-        match self.data.add_score(cat, item, score) {
+        match self.service.add_score_to_selection(&text) {
             Ok(_) => {
                 self.central_panel.clear_input();
-                self.save_to_file();
             }
-            Err(msg) => self.state.error_message = Some(msg),
+            Err(err) => self.state.error_message = Some(err.to_string()),
         }
     }
 
@@ -223,118 +169,39 @@ impl WeightedScoreTracker {
         new_item: String,
         decay_str: String,
     ) {
-        // 操作をシミュレーション
-        let mut temp_data = self.data.clone();
+        let old_loc = (old_cat.as_str(), old_item.as_str());
+        let new_loc = (new_cat.as_str(), new_item.as_str());
 
-        let result = (|| -> Result<(), String> {
-            // シミュレート
-            let decay = decay_str_parse(&decay_str)?;
-            temp_data.move_item(&old_cat, &new_cat, &old_item)?;
-            temp_data.rename_item(&new_cat, &old_item, new_item.clone())?;
-            temp_data.update_decay(&new_cat, &new_item, decay)?;
-            Ok(())
-        })();
-
-        match result {
-            Ok(_) => {
-                self.data = temp_data; // 成功した場合はシミュレーション結果に上書き
-
-                // 選択状態の追従 : もし編集していた項目を選択中だったら、選択情報を更新する
-                if self.state.selection.current_category.as_ref() == Some(&old_cat)
-                    && self.state.selection.current_item.as_ref() == Some(&old_item)
-                {
-                    self.state.selection.current_category = Some(new_cat);
-                    self.state.selection.current_item = Some(new_item);
-                }
-
-                self.save_to_file();
-                self.state.active_modal = None;
-            }
-            Err(msg) => self.state.error_message = Some(msg),
+        if let Err(err) = self.service.update_item(old_loc, new_loc, &decay_str) {
+            self.state.error_message = Some(err.to_string());
         }
     }
 
     /// 減衰率変更
     fn update_decay_rate(&mut self, decay_str: String) {
-        let (Some(cat), Some(item)) = (
-            &self.state.selection.current_category,
-            &self.state.selection.current_item,
-        ) else {
-            return;
-        };
-
-        let decay = match decay_str_parse(&decay_str) {
-            Ok(v) => v,
-            Err(msg) => {
-                self.state.error_message = Some(msg);
-                return;
-            }
-        };
-
-        match self.data.update_decay(cat, item, decay) {
-            Ok(_) => {
-                self.save_to_file();
-                self.state.active_modal = None;
-            }
-            Err(msg) => self.state.error_message = Some(msg),
+        if let Err(err) = self.service.update_decay_for_selection(&decay_str) {
+            self.state.error_message = Some(err.to_string());
         }
     }
 
     /// カテゴリ削除実行
     fn execute_delete_category(&mut self, name: String) {
-        // モデルの処理を呼び出し、結果で分岐
-        match self.data.remove_category(&name) {
-            Ok(_) => {
-                if self.state.selection.current_category.as_ref() == Some(&name) {
-                    self.state.selection.current_category = None;
-                    self.state.selection.current_item = None;
-                }
-                self.save_to_file();
-                self.state.active_modal = None;
-            }
-            Err(msg) => {
-                self.state.error_message = Some(msg);
-            }
+        if let Err(err) = self.service.delete_category(&name) {
+            self.state.error_message = Some(err.to_string());
         }
     }
 
     /// 項目削除
     fn execute_delete_item(&mut self, cat: String, item: String) {
-        match self.data.remove_item(&cat, &item) {
-            Ok(_) => {
-                if self.state.selection.current_category.as_ref() == Some(&cat)
-                    && self.state.selection.current_item.as_ref() == Some(&item)
-                {
-                    self.state.selection.current_item = None;
-                    self.state.selection.selected_history_index = None;
-                }
-                self.save_to_file();
-                self.state.active_modal = None;
-            }
-            Err(msg) => {
-                self.state.error_message = Some(msg);
-            }
+        if let Err(err) = self.service.delete_item(&cat, &item) {
+            self.state.error_message = Some(err.to_string());
         }
     }
 
     /// スコア削除
     fn execute_delete_score(&mut self, idx: usize) {
-        let (Some(cat), Some(item)) = (
-            &self.state.selection.current_category,
-            &self.state.selection.current_item,
-        ) else {
-            return;
-        };
-
-        match self.data.remove_score(cat, item, idx) {
-            Ok(_) => {
-                self.state.selection.selected_history_index = None;
-                self.save_to_file();
-                self.state.active_modal = None;
-            }
-            Err(msg) => {
-                self.state.error_message = Some(msg);
-            }
+        if let Err(err) = self.service.delete_score_from_selection(idx) {
+            self.state.error_message = Some(err.to_string());
         }
     }
 }
@@ -347,10 +214,10 @@ impl eframe::App for WeightedScoreTracker {
 
         let side_act = self
             .side_panel
-            .show(ctx, &self.data, &mut self.state, is_panel_enabled);
-        let central_act =
-            self.central_panel
-                .show(ctx, &self.data, &mut self.state, is_panel_enabled);
+            .show(ctx, self.service.model(), is_panel_enabled);
+        let central_act = self
+            .central_panel
+            .show(ctx, self.service.model(), is_panel_enabled);
 
         let modal_act = self.modal_layer.show(ctx, &mut self.state);
 

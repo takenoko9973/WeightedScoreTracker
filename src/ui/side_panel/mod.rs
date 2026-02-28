@@ -1,8 +1,7 @@
 pub mod category_list;
 
 use crate::action::Action;
-use crate::domain::AppData;
-use crate::ui::state::UiState;
+use crate::domain::TrackerModel;
 use eframe::egui;
 
 pub struct SidePanel {}
@@ -15,8 +14,7 @@ impl SidePanel {
     pub fn show(
         &mut self,
         ctx: &egui::Context,
-        data: &AppData,
-        state: &mut UiState,
+        model: &TrackerModel,
         enabled: bool,
     ) -> Option<Action> {
         let mut action = None;
@@ -41,7 +39,7 @@ impl SidePanel {
 
                 // メインのリストエリア
                 egui::CentralPanel::default().show_inside(ui, |ui| {
-                    if let Some(a) = category_list::show(ui, data, &state.selection) {
+                    if let Some(a) = category_list::show(ui, &model.data, &model.selection) {
                         action = Some(a);
                     }
                 });

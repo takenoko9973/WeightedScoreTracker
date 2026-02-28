@@ -1,18 +1,18 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::default_created_at;
+use super::{DomainError, default_created_at};
 use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
 
 // バリデーションヘルパー関数
-pub fn validate_decay_rate_range(rate: f64) -> Result<(), String> {
+pub fn validate_decay_rate_range(rate: f64) -> Result<(), DomainError> {
     if (MIN_DECAY_RATE..=MAX_DECAY_RATE).contains(&rate) {
         Ok(())
     } else {
-        Err(format!(
+        Err(DomainError::Validation(format!(
             "減衰率は {:.2} ～ {:.2} の範囲で指定してください。",
             MIN_DECAY_RATE, MAX_DECAY_RATE
-        ))
+        )))
     }
 }
 
@@ -34,9 +34,11 @@ pub struct ItemData {
 }
 
 impl ItemData {
-    pub fn add_score(&mut self, score: i64) -> Result<(), String> {
+    pub fn add_score(&mut self, score: i64) -> Result<(), DomainError> {
         if score < 0 {
-            return Err("スコアにマイナスの値は入力できません。".to_string());
+            return Err(DomainError::Validation(
+                "スコアにマイナスの値は入力できません。".to_string(),
+            ));
         }
 
         let now = Utc::now();
@@ -51,9 +53,11 @@ impl ItemData {
         Ok(())
     }
 
-    pub fn remove_score(&mut self, index: usize) -> Result<(), String> {
+    pub fn remove_score(&mut self, index: usize) -> Result<(), DomainError> {
         if index >= self.scores.len() {
-            return Err("指定されたスコアのインデックスが範囲外です。".to_string());
+            return Err(DomainError::Validation(
+                "指定されたスコアのインデックスが範囲外です。".to_string(),
+            ));
         }
 
         self.scores.remove(index);
@@ -62,7 +66,7 @@ impl ItemData {
         Ok(())
     }
 
-    pub fn update_decay_rate(&mut self, new_rate: f64) -> Result<(), String> {
+    pub fn update_decay_rate(&mut self, new_rate: f64) -> Result<(), DomainError> {
         validate_decay_rate_range(new_rate)?;
 
         self.decay_rate = new_rate;

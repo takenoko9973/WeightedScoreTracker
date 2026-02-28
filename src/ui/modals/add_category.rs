@@ -1,5 +1,6 @@
 use super::{Modal, ModalResult};
 use crate::action::Action;
+use crate::utils::ime::ImeFocusExtension;
 use eframe::egui;
 
 pub struct AddCategoryModal {
@@ -24,7 +25,8 @@ impl Modal for AddCategoryModal {
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
                 ui.label("カテゴリ名:");
-                ui.text_edit_singleline(&mut self.input_cat);
+                let res = ui.text_edit_singleline(&mut self.input_cat);
+                res.handle_ime_focus(ui);
 
                 ui.add_space(10.0);
 
