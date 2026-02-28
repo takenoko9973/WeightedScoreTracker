@@ -73,16 +73,6 @@ impl<S: DataStore> TrackerService<S> {
         self.persist()
     }
 
-    pub fn update_decay_for_selection(&mut self, decay_input: &str) -> Result<(), AppError> {
-        let (cat, item) = self
-            .selected_item_pair()
-            .ok_or_else(|| AppError::Domain("項目が選択されていません。".into()))?;
-
-        let decay = parse_f64(decay_input, "有効な数値を入力してください。")?;
-        self.model.update_decay(&cat, &item, decay)?;
-        self.persist()
-    }
-
     pub fn delete_category(&mut self, category_name: &str) -> Result<(), AppError> {
         self.model.remove_category(category_name)?;
         self.persist()
@@ -226,19 +216,6 @@ mod tests {
             1
         );
         assert_eq!(*save_calls.borrow(), 1);
-    }
-
-    #[test]
-    fn update_decay_for_selection_returns_input_error_for_invalid_value() {
-        // 減衰率入力が不正な場合に入力エラーとなり永続化されないことを確認する。
-        let store = MockStore::new(Some(seeded_data()));
-        let save_calls = Rc::clone(&store.save_calls);
-        let mut service = TrackerService::new(store).unwrap();
-        service.select_item("Cat".to_string(), "Item".to_string());
-
-        let err = service.update_decay_for_selection("invalid").unwrap_err();
-        assert!(matches!(err, AppError::Input(_)));
-        assert_eq!(*save_calls.borrow(), 0);
     }
 
     #[test]

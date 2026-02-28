@@ -101,15 +101,6 @@ impl TrackerModel {
         Ok(())
     }
 
-    pub fn update_decay(
-        &mut self,
-        cat_name: &str,
-        item_name: &str,
-        decay: f64,
-    ) -> Result<(), DomainError> {
-        self.data.update_decay(cat_name, item_name, decay)
-    }
-
     pub fn add_score(
         &mut self,
         cat_name: &str,

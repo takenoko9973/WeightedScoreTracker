@@ -8,7 +8,6 @@ use crate::ui::modals::add_category::AddCategoryModal;
 use crate::ui::modals::add_item::AddItemModal;
 use crate::ui::modals::confirm::ConfirmationModal;
 use crate::ui::modals::edit_category::EditCategoryModal;
-use crate::ui::modals::edit_decay::EditDecayModal;
 use crate::ui::modals::edit_item::EditItemModal;
 use crate::ui::side_panel::SidePanel;
 use crate::ui::state::UiState;
@@ -80,17 +79,6 @@ impl WeightedScoreTracker {
                     Err(e) => self.state.error_message = Some(e.to_string()),
                 }
             }
-            Action::ShowEditDecayModal(decay_rate) => {
-                let Some(cat_name) = self.service.model().selection.category.clone() else {
-                    return;
-                };
-                let Some(item_name) = self.service.model().selection.item.clone() else {
-                    return;
-                };
-
-                self.modal_layer
-                    .open(EditDecayModal::new(cat_name, item_name, decay_rate));
-            }
             Action::ShowDeleteCategoryConfirm(cat_name) => {
                 self.modal_layer
                     .open(ConfirmationModal::new_delete_category(cat_name));
@@ -118,7 +106,6 @@ impl WeightedScoreTracker {
             Action::UpdateItem(old_cat, old_item, new_cat, new_name, decay_str) => {
                 self.update_item(old_cat, old_item, new_cat, new_name, decay_str);
             }
-            Action::UpdateDecayRate(rate) => self.update_decay_rate(rate),
             Action::ExecuteDeleteCategory(name) => self.execute_delete_category(name),
             Action::ExecuteDeleteItem(cat, item) => self.execute_delete_item(cat, item),
             Action::ExecuteDeleteScore(idx) => self.execute_delete_score(idx),
@@ -173,13 +160,6 @@ impl WeightedScoreTracker {
         let new_loc = (new_cat.as_str(), new_item.as_str());
 
         if let Err(err) = self.service.update_item(old_loc, new_loc, &decay_str) {
-            self.state.error_message = Some(err.to_string());
-        }
-    }
-
-    /// 減衰率変更
-    fn update_decay_rate(&mut self, decay_str: String) {
-        if let Err(err) = self.service.update_decay_for_selection(&decay_str) {
             self.state.error_message = Some(err.to_string());
         }
     }
