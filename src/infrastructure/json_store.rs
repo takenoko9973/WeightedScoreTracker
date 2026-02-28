@@ -78,14 +78,18 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    #[test]
-    fn json_store_roundtrip() {
+    fn unique_path(name: &str) -> PathBuf {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("time went backwards")
             .as_nanos();
+        std::env::temp_dir().join(format!("{name}-{unique}.json"))
+    }
 
-        let path = std::env::temp_dir().join(format!("weighted-score-{}.json", unique));
+    #[test]
+    fn json_store_roundtrip() {
+        // JSON ファイルへ保存したデータを再読み込みして内容が保持されることを確認する。
+        let path = unique_path("weighted-score");
         let store = JsonFileStore::new(&path);
 
         let mut data = AppData::default();
@@ -99,6 +103,28 @@ mod tests {
             .expect("failed to load test data")
             .expect("expected data");
         assert!(loaded.categories.contains_key("test"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn load_returns_none_when_file_does_not_exist() {
+        // 保存ファイルが存在しない場合に load が None を返すことを確認する。
+        let path = unique_path("weighted-score-missing");
+        let store = JsonFileStore::new(path);
+        let loaded = store.load().unwrap();
+        assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn load_returns_error_for_invalid_json() {
+        // 不正な JSON 形式のファイルを読み込むと永続化エラーになることを確認する。
+        let path = unique_path("weighted-score-invalid");
+        fs::write(&path, "{ not-json }").unwrap();
+
+        let store = JsonFileStore::new(&path);
+        let result = store.load();
+        assert!(matches!(result, Err(AppError::Persistence(_))));
 
         let _ = fs::remove_file(path);
     }

@@ -2,7 +2,6 @@ pub mod add_category;
 pub mod add_item;
 pub mod confirm;
 pub mod edit_category;
-pub mod edit_decay;
 pub mod edit_item;
 pub mod error;
 

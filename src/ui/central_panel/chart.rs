@@ -18,6 +18,7 @@ impl WeightedScoreChart {
         ui: &mut egui::Ui,
         scores: &[ScoreEntry],
         decay_rate: f64,
+        show_average_line: bool,
         selected_index: &mut Option<usize>,
         scroll_req_index: &mut Option<usize>,
     ) {
@@ -29,7 +30,7 @@ impl WeightedScoreChart {
         let (bars, boundaries) = self.create_bars(scores, &weights, *selected_index);
 
         // プロット、クリック処理
-        let clicked_idx = self.draw_plot(ui, bars, &boundaries, avg, &params);
+        let clicked_idx = self.draw_plot(ui, bars, &boundaries, avg, &params, show_average_line);
 
         // クリック結果
         if let Some(idx) = clicked_idx {
@@ -88,6 +89,7 @@ impl WeightedScoreChart {
         boundaries: &[f64],
         avg: f64,
         params: &PlotParams,
+        show_average_line: bool,
     ) -> Option<usize> {
         let plot_height = ui.available_height() * 0.6; // 画面の縦幅6割を使用
         let plot = Plot::new("score_plot")
@@ -105,7 +107,9 @@ impl WeightedScoreChart {
         let total_width = bars.iter().map(|bar| bar.bar_width).sum();
         plot.show(ui, |plot_ui| {
             self.show_bars(plot_ui, bars);
-            self.show_average_line(plot_ui, avg, total_width);
+            if show_average_line {
+                self.show_average_line(plot_ui, avg, total_width);
+            }
             self.check_click(plot_ui, boundaries, total_width)
         })
         .inner

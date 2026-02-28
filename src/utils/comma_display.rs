@@ -74,3 +74,35 @@ fn format_float_string(s: &str) -> String {
         Err(_) => s.to_string(), // NaNなどはそのまま返す
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::CommaDisplay;
+
+    #[test]
+    fn integer_formats_with_commas() {
+        // 整数値が 3 桁区切りのカンマ形式で表示されることを確認する。
+        assert_eq!(1234567_i64.to_comma(), "1,234,567");
+        assert_eq!((-987654_i64).to_comma(), "-987,654");
+    }
+
+    #[test]
+    fn float_formats_with_specified_precision() {
+        // 浮動小数点数が指定精度で丸められカンマ付き表示になることを確認する。
+        assert_eq!(12345.6789_f64.to_comma_fmt(2), "12,345.68");
+        assert_eq!((-1234.5_f64).to_comma_fmt(3), "-1,234.500");
+    }
+
+    #[test]
+    fn float_default_precision_is_two_digits() {
+        // to_comma の既定精度が小数点以下 2 桁であることを確認する。
+        assert_eq!(12.3_f64.to_comma(), "12.30");
+        assert_eq!(12.3_f32.to_comma(), "12.30");
+    }
+
+    #[test]
+    fn nan_is_returned_as_is() {
+        // NaN は数値変換せず文字列 "NaN" として返されることを確認する。
+        assert_eq!(f64::NAN.to_comma_fmt(2), "NaN");
+    }
+}
