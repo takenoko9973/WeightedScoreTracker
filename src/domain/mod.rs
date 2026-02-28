@@ -5,10 +5,13 @@ pub fn default_created_at() -> DateTime<Utc> {
 
 mod app_data;
 mod category;
+mod error;
 mod item;
+mod model;
 mod selection;
 
 pub use app_data::AppData;
 pub use category::CategoryData;
 pub use item::{ItemData, ScoreEntry};
+pub use model::TrackerModel;
 pub use selection::SelectionState;
