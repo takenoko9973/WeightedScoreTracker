@@ -2,6 +2,13 @@ use crate::action::Action;
 use crate::domain::ScoreEntry;
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
+use eframe::egui::UiKind;
+
+const COPY_SCORE_MENU_LABEL: &str = "📋 スコアをコピー";
+
+fn copied_text_if_requested(clicked: bool, score: i64) -> Option<String> {
+    clicked.then(|| score.to_string())
+}
 
 pub struct HistoryList<'a> {
     score_entries: &'a [ScoreEntry],
@@ -114,6 +121,19 @@ impl<'a> HistoryRow<'a> {
                 *selected_index = Some(self.index);
             }
 
+            // 右クリックメニュー: スコアコピー
+            let mut copied_text = None;
+            response_label.context_menu(|ui| {
+                let clicked = ui.button(COPY_SCORE_MENU_LABEL).clicked();
+                copied_text = copied_text_if_requested(clicked, self.entry.score);
+                if copied_text.is_some() {
+                    ui.close_kind(UiKind::Menu);
+                }
+            });
+            if let Some(text) = copied_text {
+                ui.ctx().copy_text(text);
+            }
+
             // 自動スクロール
             if should_scroll {
                 response_label.scroll_to_me(Some(egui::Align::Center));
@@ -121,5 +141,30 @@ impl<'a> HistoryRow<'a> {
         });
 
         action
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn copied_text_is_generated_when_copy_menu_is_clicked() {
+        // 右クリックメニューのコピー操作が選択されたときに、スコア文字列が生成されることを確認する。
+        let copied = copied_text_if_requested(true, 12345);
+        assert_eq!(copied, Some("12345".to_string()));
+    }
+
+    #[test]
+    fn copied_text_is_none_when_copy_menu_is_not_clicked() {
+        // 右クリックメニューのコピー操作が未選択なら、コピー文字列が生成されないことを確認する。
+        let copied = copied_text_if_requested(false, 12345);
+        assert_eq!(copied, None);
+    }
+
+    #[test]
+    fn copy_menu_label_is_expected_text() {
+        // 履歴行の右クリックメニューに表示するラベル文言が意図した値であることを確認する。
+        assert_eq!(COPY_SCORE_MENU_LABEL, "📋 スコアをコピー");
     }
 }
