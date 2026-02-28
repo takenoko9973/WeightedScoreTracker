@@ -129,8 +129,7 @@ impl AppData {
 
     /// 項目の削除
     pub fn remove_item(&mut self, cat: &str, item: &str) -> Result<(), DomainError> {
-        let _ = self.get_category_mut(cat)?.remove_item(item);
-        Ok(())
+        self.get_category_mut(cat)?.remove_item(item).map(|_| ())
     }
 
     /// 項目名の変更
@@ -183,5 +182,92 @@ impl AppData {
     /// スコアを削除
     pub fn remove_score(&mut self, cat: &str, item: &str, index: usize) -> Result<(), DomainError> {
         self.get_item_mut(cat, item)?.remove_score(index)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seed_data() -> AppData {
+        let mut data = AppData::default();
+        data.add_category("CatA".to_string()).unwrap();
+        data.add_category("CatB".to_string()).unwrap();
+        data.add_item("CatA", "Item1".to_string(), 0.9).unwrap();
+        data
+    }
+
+    #[test]
+    fn add_category_trims_name_and_rejects_invalid_or_duplicate() {
+        // カテゴリ名の前後空白が除去され、空名と重複名が拒否されることを確認する。
+        let mut data = AppData::default();
+        data.add_category("  Work  ".to_string()).unwrap();
+        assert!(data.categories.contains_key("Work"));
+
+        let err = data.add_category("   ".to_string()).unwrap_err();
+        assert!(matches!(err, DomainError::Validation(_)));
+
+        let err = data.add_category("Work".to_string()).unwrap_err();
+        assert!(matches!(err, DomainError::AlreadyExists(_)));
+    }
+
+    #[test]
+    fn rename_category_validates_and_moves_data() {
+        // カテゴリ名変更時にデータが移動し、不正入力と不存在カテゴリがエラーになることを確認する。
+        let mut data = seed_data();
+
+        data.rename_category("CatA", "  Focus  ".to_string())
+            .unwrap();
+        assert!(data.categories.contains_key("Focus"));
+        assert!(!data.categories.contains_key("CatA"));
+        assert!(data.get_item("Focus", "Item1").is_ok());
+
+        let err = data
+            .rename_category("Focus", "   ".to_string())
+            .unwrap_err();
+        assert!(matches!(err, DomainError::Validation(_)));
+
+        let err = data
+            .rename_category("Unknown", "X".to_string())
+            .unwrap_err();
+        assert!(matches!(err, DomainError::NotFound(_)));
+    }
+
+    #[test]
+    fn move_item_moves_between_categories_and_checks_duplicates() {
+        // 項目のカテゴリ移動が成功し、移動先で同名重複がある場合はエラーになることを確認する。
+        let mut data = seed_data();
+        data.add_item("CatB", "Item2".to_string(), 0.8).unwrap();
+
+        data.move_item("CatA", "CatB", "Item1").unwrap();
+        assert!(data.get_item("CatB", "Item1").is_ok());
+        assert!(data.get_item("CatA", "Item1").is_err());
+
+        data.add_item("CatA", "Shared".to_string(), 0.7).unwrap();
+        data.add_item("CatB", "Shared".to_string(), 0.7).unwrap();
+        let err = data.move_item("CatA", "CatB", "Shared").unwrap_err();
+        assert!(matches!(err, DomainError::AlreadyExists(_)));
+    }
+
+    #[test]
+    fn remove_item_propagates_not_found_error() {
+        // 存在しない項目の削除時に NotFound エラーが呼び出し元へ返ることを確認する。
+        let mut data = seed_data();
+
+        data.remove_item("CatA", "Item1").unwrap();
+        let err = data.remove_item("CatA", "Item1").unwrap_err();
+        assert!(matches!(err, DomainError::NotFound(_)));
+    }
+
+    #[test]
+    fn add_and_remove_score_through_app_data() {
+        // AppData 経由でスコア追加と削除を行ったときに件数が正しく変化することを確認する。
+        let mut data = seed_data();
+
+        data.add_score("CatA", "Item1", 10).unwrap();
+        assert_eq!(data.get_item("CatA", "Item1").unwrap().scores.len(), 1);
+
+        data.remove_score("CatA", "Item1", 0).unwrap();
+        assert_eq!(data.get_item("CatA", "Item1").unwrap().scores.len(), 0);
     }
 }

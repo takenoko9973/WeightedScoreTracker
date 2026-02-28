@@ -55,3 +55,82 @@ pub fn calculate_plot_params(scores: &[ScoreEntry], weights: &[f64]) -> PlotPara
 
     PlotParams { max_y, min_y }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn score_entries(values: &[i64]) -> Vec<ScoreEntry> {
+        values
+            .iter()
+            .map(|&score| ScoreEntry {
+                score,
+                timestamp: Utc::now(),
+            })
+            .collect()
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        let diff = (actual - expected).abs();
+        assert!(
+            diff < 1e-9,
+            "expected {expected}, got {actual}, diff {diff}"
+        );
+    }
+
+    #[test]
+    fn calculate_stats_returns_default_for_empty_scores() {
+        // スコア履歴が空のときに統計値と重みが既定値で返ることを確認する。
+        let (mean, std, n, weights) = calculate_stats(&[], 0.9);
+        assert_eq!(mean, 0.0);
+        assert_eq!(std, 0.0);
+        assert_eq!(n, 0);
+        assert!(weights.is_empty());
+    }
+
+    #[test]
+    fn calculate_stats_generates_decay_weights_and_statistics() {
+        // 減衰率に基づく重み配列と加重平均・標準偏差が期待値になることを確認する。
+        let scores = score_entries(&[10, 20, 30]);
+        let (mean, std, n, weights) = calculate_stats(&scores, 0.5);
+
+        assert_eq!(n, 3);
+        assert_eq!(weights, vec![0.25, 0.5, 1.0]);
+        assert_close(mean, 24.285714285714285);
+        assert_close(std, 7.284313590846315);
+    }
+
+    #[test]
+    fn calculate_plot_params_uses_only_scores_above_weight_threshold() {
+        // 重み閾値以上のスコアのみを使って表示範囲が計算されることを確認する。
+        let scores = score_entries(&[10, 100, 20]);
+        let weights = vec![0.05, 0.2, 1.0];
+
+        let params = calculate_plot_params(&scores, &weights);
+        assert_close(params.min_y, 12.0);
+        assert_close(params.max_y, 108.0);
+    }
+
+    #[test]
+    fn calculate_plot_params_falls_back_to_all_scores_when_filtered_empty() {
+        // 閾値フィルタ後に対象が空の場合は全スコアで表示範囲を再計算することを確認する。
+        let scores = score_entries(&[10, 30]);
+        let weights = vec![0.01, 0.02];
+
+        let params = calculate_plot_params(&scores, &weights);
+        assert_close(params.min_y, 8.0);
+        assert_close(params.max_y, 32.0);
+    }
+
+    #[test]
+    fn calculate_plot_params_clamps_min_y_to_zero() {
+        // 表示範囲の下限が負値にならないよう 0.0 にクランプされることを確認する。
+        let scores = score_entries(&[0, 5]);
+        let weights = vec![1.0, 1.0];
+
+        let params = calculate_plot_params(&scores, &weights);
+        assert_close(params.min_y, 0.0);
+        assert_close(params.max_y, 5.5);
+    }
+}

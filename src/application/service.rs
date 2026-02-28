@@ -124,3 +124,131 @@ fn parse_i64(input: &str, message: &str) -> Result<i64, AppError> {
         .parse::<i64>()
         .map_err(|_| AppError::Input(message.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::AppData;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    struct MockStore {
+        loaded: Option<AppData>,
+        save_calls: Rc<RefCell<usize>>,
+        fail_on_load: bool,
+        fail_on_save: bool,
+    }
+
+    impl MockStore {
+        fn new(loaded: Option<AppData>) -> Self {
+            Self {
+                loaded,
+                save_calls: Rc::new(RefCell::new(0)),
+                fail_on_load: false,
+                fail_on_save: false,
+            }
+        }
+    }
+
+    impl DataStore for MockStore {
+        fn load(&self) -> Result<Option<AppData>, AppError> {
+            if self.fail_on_load {
+                return Err(AppError::Persistence("load failed".to_string()));
+            }
+            Ok(self.loaded.clone())
+        }
+
+        fn save(&self, _data: &AppData) -> Result<(), AppError> {
+            *self.save_calls.borrow_mut() += 1;
+            if self.fail_on_save {
+                return Err(AppError::Persistence("save failed".to_string()));
+            }
+            Ok(())
+        }
+    }
+
+    fn seeded_data() -> AppData {
+        let mut data = AppData::default();
+        data.add_category("Cat".to_string()).unwrap();
+        data.add_item("Cat", "Item".to_string(), 0.9).unwrap();
+        data
+    }
+
+    #[test]
+    fn new_loads_existing_data_from_store() {
+        // ストアに保存済みのデータがサービス初期化時に正しく読み込まれることを確認する。
+        let store = MockStore::new(Some(seeded_data()));
+        let service = TrackerService::new(store).unwrap();
+
+        assert!(service.model().data.categories.contains_key("Cat"));
+        assert!(service.model().get_item("Cat", "Item").is_ok());
+    }
+
+    #[test]
+    fn add_item_returns_input_error_when_decay_is_invalid_number() {
+        // 減衰率の入力が数値でない場合に入力エラーが返ることを確認する。
+        let store = MockStore::new(Some(seeded_data()));
+        let mut service = TrackerService::new(store).unwrap();
+
+        let err = service
+            .add_item("Cat", "New".to_string(), "not-a-number")
+            .unwrap_err();
+        assert!(matches!(err, AppError::Input(_)));
+    }
+
+    #[test]
+    fn add_score_to_selection_requires_selected_item() {
+        // 項目未選択の状態でスコア追加するとドメインエラーになることを確認する。
+        let store = MockStore::new(Some(seeded_data()));
+        let mut service = TrackerService::new(store).unwrap();
+
+        let err = service.add_score_to_selection("10").unwrap_err();
+        assert!(matches!(err, AppError::Domain(_)));
+    }
+
+    #[test]
+    fn add_score_to_selection_persists_on_success() {
+        // スコア追加成功時にモデル更新と永続化処理が実行されることを確認する。
+        let store = MockStore::new(Some(seeded_data()));
+        let save_calls = Rc::clone(&store.save_calls);
+        let mut service = TrackerService::new(store).unwrap();
+        service.select_item("Cat".to_string(), "Item".to_string());
+
+        service.add_score_to_selection("10").unwrap();
+
+        assert_eq!(
+            service
+                .model()
+                .get_item("Cat", "Item")
+                .unwrap()
+                .scores
+                .len(),
+            1
+        );
+        assert_eq!(*save_calls.borrow(), 1);
+    }
+
+    #[test]
+    fn update_decay_for_selection_returns_input_error_for_invalid_value() {
+        // 減衰率入力が不正な場合に入力エラーとなり永続化されないことを確認する。
+        let store = MockStore::new(Some(seeded_data()));
+        let save_calls = Rc::clone(&store.save_calls);
+        let mut service = TrackerService::new(store).unwrap();
+        service.select_item("Cat".to_string(), "Item".to_string());
+
+        let err = service.update_decay_for_selection("invalid").unwrap_err();
+        assert!(matches!(err, AppError::Input(_)));
+        assert_eq!(*save_calls.borrow(), 0);
+    }
+
+    #[test]
+    fn persistence_error_is_propagated() {
+        // 永続化処理で発生したエラーがサービス層から呼び出し元へ伝播することを確認する。
+        let mut store = MockStore::new(None);
+        store.fail_on_save = true;
+        let mut service = TrackerService::new(store).unwrap();
+
+        let err = service.add_category("Cat".to_string()).unwrap_err();
+        assert!(matches!(err, AppError::Persistence(_)));
+    }
+}

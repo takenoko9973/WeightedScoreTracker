@@ -70,3 +70,53 @@ impl CategoryData {
             .ok_or_else(|| DomainError::NotFound("削除対象の項目が見つかりません。".to_string()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_category() -> CategoryData {
+        CategoryData {
+            items: HashMap::new(),
+            created_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn add_item_trims_name_and_rejects_duplicate() {
+        // 項目名の前後空白が除去され、同名項目の追加が拒否されることを確認する。
+        let mut category = empty_category();
+        category.add_item("  A  ".to_string(), 0.9).unwrap();
+        assert!(category.item_exists("A"));
+
+        let err = category.add_item("A".to_string(), 0.9).unwrap_err();
+        assert!(matches!(err, DomainError::AlreadyExists(_)));
+    }
+
+    #[test]
+    fn rename_item_validates_and_moves_entry() {
+        // 項目名変更でエントリが移動し、空名と不存在項目がエラーになることを確認する。
+        let mut category = empty_category();
+        category.add_item("Old".to_string(), 0.9).unwrap();
+
+        category.rename_item("Old", "  New  ".to_string()).unwrap();
+        assert!(category.item_exists("New"));
+        assert!(!category.item_exists("Old"));
+
+        let err = category.rename_item("New", "   ".to_string()).unwrap_err();
+        assert!(matches!(err, DomainError::Validation(_)));
+
+        let err = category
+            .rename_item("Missing", "X".to_string())
+            .unwrap_err();
+        assert!(matches!(err, DomainError::NotFound(_)));
+    }
+
+    #[test]
+    fn remove_item_returns_error_when_missing() {
+        // 存在しない項目を削除しようとした場合に NotFound エラーになることを確認する。
+        let mut category = empty_category();
+        let err = category.remove_item("Nope").unwrap_err();
+        assert!(matches!(err, DomainError::NotFound(_)));
+    }
+}
