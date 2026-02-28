@@ -1,6 +1,6 @@
 use super::{Modal, ModalResult};
 use crate::action::Action;
-use crate::constants::MIN_DECAY_RATE;
+use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
 use crate::utils::ime::ImeFocusExtension;
 use eframe::egui;
 
@@ -57,7 +57,7 @@ impl Modal for EditItemModal {
                         ui.end_row();
 
                         ui.label("項目名:");
-                        let res = ui.text_edit_singleline(&mut self.input_cat);
+                        let res = ui.text_edit_singleline(&mut self.input_item);
                         res.handle_ime_focus(ui);
                         ui.end_row();
 
@@ -67,7 +67,7 @@ impl Modal for EditItemModal {
                             ui.label(
                                 egui::RichText::new(format!(
                                     "({:.2} - {:.2})",
-                                    MIN_DECAY_RATE, MIN_DECAY_RATE
+                                    MIN_DECAY_RATE, MAX_DECAY_RATE
                                 ))
                                 .size(10.0)
                                 .color(egui::Color32::GRAY),

@@ -12,6 +12,7 @@ mod selection;
 
 pub use app_data::AppData;
 pub use category::CategoryData;
+pub use error::DomainError;
 pub use item::{ItemData, ScoreEntry};
 pub use model::TrackerModel;
 pub use selection::SelectionState;

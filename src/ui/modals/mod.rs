@@ -26,11 +26,6 @@ impl ModalLayer {
         self.active_modal = Some(Box::new(modal));
     }
 
-    /// モーダルを閉じる
-    pub fn close(&mut self) {
-        self.active_modal = None;
-    }
-
     /// 描画処理
     pub fn show(&mut self, ctx: &egui::Context, state: &mut UiState) -> Option<Action> {
         let mut action = None;

@@ -1,6 +1,6 @@
 use crate::domain::error::DomainError;
 
-use super::{AppData, CategoryData, ItemData, SelectionState};
+use super::{AppData, ItemData, SelectionState};
 
 /// アプリケーションのドメインロジックと状態を一元管理するモデル
 pub struct TrackerModel {
@@ -18,67 +18,31 @@ impl TrackerModel {
 
     // --- 参照系ヘルパー ---
 
-    pub fn get_category(&self, name: &str) -> Result<&CategoryData, DomainError> {
-        self.data
-            .categories
-            .get(name)
-            .ok_or_else(|| DomainError::NotFound(format!("カテゴリ「{}」", name)))
-    }
-
     pub fn get_item(&self, cat: &str, item: &str) -> Result<&ItemData, DomainError> {
-        self.get_category(cat)?
-            .items
-            .get(item)
-            .ok_or_else(|| DomainError::NotFound(format!("項目「{}」", item)))
+        self.data.get_item(cat, item)
     }
 
     // --- 操作系ロジック ---
 
     pub fn add_category(&mut self, name: String) -> Result<(), DomainError> {
-        let name = name.trim().to_string();
-        if name.is_empty() {
-            return Err(DomainError::Validation("カテゴリ名が空です".into()));
-        }
-        if self.data.categories.contains_key(&name) {
-            return Err(DomainError::AlreadyExists(name));
-        }
-
-        self.data.add_category(name);
-        Ok(())
+        self.data.add_category(name)
     }
 
     pub fn rename_category(&mut self, old_name: &str, new_name: String) -> Result<(), DomainError> {
-        let new_name = new_name.trim().to_string();
-        if old_name == new_name {
-            return Ok(());
-        }
-        if new_name.is_empty() {
-            return Err(DomainError::Validation("新しい名前が空です".into()));
-        }
-        if self.data.categories.contains_key(&new_name) {
-            return Err(DomainError::AlreadyExists(new_name));
-        }
-
-        // データ移動
-        let category_data = self
-            .data
-            .categories
-            .remove(old_name)
-            .ok_or_else(|| DomainError::NotFound(old_name.to_string()))?;
-        self.data.categories.insert(new_name.clone(), category_data);
+        let normalized_name = new_name.trim().to_string();
+        self.data
+            .rename_category(old_name, normalized_name.clone())?;
 
         // 選択状態の自動追従
         if self.selection.category.as_deref() == Some(old_name) {
-            self.selection.category = Some(new_name);
+            self.selection.category = Some(normalized_name);
         }
 
         Ok(())
     }
 
     pub fn remove_category(&mut self, name: &str) -> Result<(), DomainError> {
-        if self.data.categories.remove(name).is_none() {
-            return Err(DomainError::NotFound(name.to_string()));
-        }
+        self.data.remove_category(name)?;
 
         // 選択中のカテゴリが削除されたら選択解除
         if self.selection.category.as_deref() == Some(name) {
@@ -94,28 +58,10 @@ impl TrackerModel {
         item_name: String,
         decay: f64,
     ) -> Result<(), DomainError> {
-        let item_name = item_name.trim().to_string();
-        if item_name.is_empty() {
-            return Err(DomainError::Validation("項目名が空です".into()));
-        }
-
-        let category = self
-            .data
-            .categories
-            .get_mut(cat_name)
-            .ok_or_else(|| DomainError::NotFound(cat_name.to_string()))?;
-
-        if category.items.contains_key(&item_name) {
-            return Err(DomainError::AlreadyExists(item_name));
-        }
-
-        category
-            .add_item(item_name, decay)
-            .map_err(DomainError::Validation)?;
-        Ok(())
+        self.data.add_item(cat_name, item_name, decay)
     }
 
-    pub fn remove_item(&mut self, cat_name: &str, item_name: &str) -> Result<(), String> {
+    pub fn remove_item(&mut self, cat_name: &str, item_name: &str) -> Result<(), DomainError> {
         self.data.remove_item(cat_name, item_name)?;
 
         if self.selection.category.as_deref() == Some(cat_name)
@@ -132,7 +78,7 @@ impl TrackerModel {
         old_loc: (&str, &str),
         new_loc: (&str, &str),
         decay: f64,
-    ) -> Result<(), String> {
+    ) -> Result<(), DomainError> {
         let (old_cat, old_item) = old_loc;
         let (new_cat, new_item) = new_loc;
 
@@ -155,50 +101,12 @@ impl TrackerModel {
         Ok(())
     }
 
-    pub fn rename_item(
-        &mut self,
-        cat_name: &str,
-        old_item: &str,
-        new_item: String,
-    ) -> Result<(), DomainError> {
-        let new_item = new_item.trim().to_string();
-        if old_item == new_item {
-            return Ok(());
-        }
-
-        let category = self
-            .data
-            .categories
-            .get_mut(cat_name)
-            .ok_or_else(|| DomainError::NotFound(cat_name.to_string()))?;
-
-        if category.items.contains_key(&new_item) {
-            return Err(DomainError::AlreadyExists(new_item));
-        }
-
-        let item_data = category
-            .items
-            .remove(old_item)
-            .ok_or_else(|| DomainError::NotFound(old_item.to_string()))?;
-
-        category.items.insert(new_item.clone(), item_data);
-
-        // 選択状態の追従
-        if self.selection.category.as_deref() == Some(cat_name)
-            && self.selection.item.as_deref() == Some(old_item)
-        {
-            self.selection.item = Some(new_item);
-        }
-
-        Ok(())
-    }
-
     pub fn update_decay(
         &mut self,
         cat_name: &str,
         item_name: &str,
         decay: f64,
-    ) -> Result<(), String> {
+    ) -> Result<(), DomainError> {
         self.data.update_decay(cat_name, item_name, decay)
     }
 
@@ -208,8 +116,7 @@ impl TrackerModel {
         item_name: &str,
         score: i64,
     ) -> Result<(), DomainError> {
-        self.data.add_score(cat_name, item_name, score);
-        Ok(())
+        self.data.add_score(cat_name, item_name, score)
     }
 
     pub fn remove_score(
@@ -217,7 +124,7 @@ impl TrackerModel {
         cat_name: &str,
         item_name: &str,
         index: usize,
-    ) -> Result<(), String> {
+    ) -> Result<(), DomainError> {
         self.data.remove_score(cat_name, item_name, index)?;
         self.selection.history_index = None;
         Ok(())
