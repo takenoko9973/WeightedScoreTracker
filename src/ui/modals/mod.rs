@@ -4,6 +4,7 @@ pub mod confirm;
 pub mod edit_category;
 pub mod edit_item;
 pub mod error;
+pub mod tag_manager;
 
 use crate::action::Action;
 use crate::ui::modals::error::ErrorModal;

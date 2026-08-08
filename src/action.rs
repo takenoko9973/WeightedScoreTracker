@@ -1,3 +1,5 @@
+use crate::domain::{MoveDirection, TagId};
+
 /// アプリケーション内で発生する操作
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -9,15 +11,21 @@ pub enum Action {
     ShowDeleteCategoryConfirm(String),     // カテゴリ削除 (対象カテゴリ名)
     ShowDeleteItemConfirm(String, String), // 項目削除 (カテゴリ名, 項目名)
     ShowDeleteScoreConfirm(usize),         // スコア削除 (対象インデックス)
+    ShowTagManagerModal,                   // タグ管理
 
     // --- データ操作リクエスト ---
-    SelectItem(String, String),        // 項目選択 (カテゴリ名, 項目名)
-    AddCategory(String),               // カテゴリ追加 (名前, 減衰率)
-    RenameCategory(String, String),    // カテゴリ名変更 (旧名, 新名)
-    AddItem(String, String, String),   // 項目追加実行 (カテゴリ名, 項目名, 減衰率)
-    AddScore(String),                  // スコア追加 (スコア)
-    ExecuteDeleteCategory(String),     // カテゴリ削除実行
-    ExecuteDeleteItem(String, String), // 項目削除
-    ExecuteDeleteScore(usize),         // スコア削除実行
-    UpdateItem(String, String, String, String, String), // 項目更新
+    SelectItem(String, String),     // 項目選択 (カテゴリ名, 項目名)
+    AddCategory(String),            // カテゴリ追加 (名前, 減衰率)
+    RenameCategory(String, String), // カテゴリ名変更 (旧名, 新名)
+    AddItem(String, String, String, String, Vec<TagId>), // 項目追加実行 (カテゴリ名, 項目名, 補足, 減衰率, タグ)
+    AddScore(String),                                    // スコア追加 (スコア)
+    ExecuteDeleteCategory(String),                       // カテゴリ削除実行
+    ExecuteDeleteItem(String, String),                   // 項目削除
+    ExecuteDeleteScore(usize),                           // スコア削除実行
+    UpdateItem(String, String, String, String, String, String, Vec<TagId>), // 項目更新
+    CreateTag(String, [u8; 3]),
+    UpdateTag(TagId, String, [u8; 3]),
+    DeleteTag(TagId),
+    MoveCategory(String, MoveDirection),
+    MoveItem(String, String, MoveDirection),
 }

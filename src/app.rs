@@ -9,6 +9,7 @@ use crate::ui::modals::add_item::AddItemModal;
 use crate::ui::modals::confirm::ConfirmationModal;
 use crate::ui::modals::edit_category::EditCategoryModal;
 use crate::ui::modals::edit_item::EditItemModal;
+use crate::ui::modals::tag_manager::TagManagerModal;
 use crate::ui::side_panel::SidePanel;
 use crate::ui::state::UiState;
 use eframe::egui;
@@ -52,7 +53,8 @@ impl WeightedScoreTracker {
                 self.modal_layer.open(AddCategoryModal::new());
             }
             Action::ShowAddItemModal(cat_name) => {
-                self.modal_layer.open(AddItemModal::new(cat_name));
+                let tags = self.service.model().tags().values().cloned().collect();
+                self.modal_layer.open(AddItemModal::new(cat_name, tags));
             }
             Action::ShowEditCategoryModal(cat_name) => {
                 self.modal_layer.open(EditCategoryModal::new(cat_name));
@@ -62,18 +64,20 @@ impl WeightedScoreTracker {
                 match self.service.model().get_item(&cat_name, &item_name) {
                     Ok(item) => {
                         let decay_rate = item.decay_rate;
-                        let mut categories: Vec<_> = self
+                        let subtitle = item.subtitle.clone();
+                        let tag_ids = item.tag_ids.clone();
+                        let categories: Vec<_> = self
                             .service
                             .model()
                             .data
-                            .categories
-                            .keys()
-                            .cloned()
+                            .ordered_category_names()
+                            .into_iter()
+                            .map(str::to_owned)
                             .collect();
-                        categories.sort();
+                        let tags = self.service.model().tags().values().cloned().collect();
 
                         self.modal_layer.open(EditItemModal::new(
-                            cat_name, item_name, decay_rate, categories,
+                            cat_name, item_name, decay_rate, subtitle, tag_ids, categories, tags,
                         ));
                     }
                     Err(e) => self.state.error_message = Some(e.to_string()),
@@ -91,6 +95,9 @@ impl WeightedScoreTracker {
                 self.modal_layer
                     .open(ConfirmationModal::new_delete_score(index));
             }
+            Action::ShowTagManagerModal => {
+                self.open_tag_manager();
+            }
 
             // データ操作系
             Action::SelectItem(cat, item) => {
@@ -101,14 +108,33 @@ impl WeightedScoreTracker {
             }
             Action::AddCategory(name) => self.add_category(name),
             Action::RenameCategory(old_name, new_name) => self.rename_category(old_name, new_name),
-            Action::AddItem(cat, name, decay) => self.add_item(cat, name, decay),
+            Action::AddItem(cat, name, subtitle, decay, tag_ids) => {
+                self.add_item(cat, name, subtitle, decay, tag_ids)
+            }
             Action::AddScore(text) => self.add_score(text),
-            Action::UpdateItem(old_cat, old_item, new_cat, new_name, decay_str) => {
-                self.update_item(old_cat, old_item, new_cat, new_name, decay_str);
+            Action::UpdateItem(
+                old_cat,
+                old_item,
+                new_cat,
+                new_name,
+                subtitle,
+                decay_str,
+                tag_ids,
+            ) => {
+                self.update_item(
+                    old_cat, old_item, new_cat, new_name, subtitle, decay_str, tag_ids,
+                );
             }
             Action::ExecuteDeleteCategory(name) => self.execute_delete_category(name),
             Action::ExecuteDeleteItem(cat, item) => self.execute_delete_item(cat, item),
             Action::ExecuteDeleteScore(idx) => self.execute_delete_score(idx),
+            Action::CreateTag(name, color) => self.create_tag(name, color),
+            Action::UpdateTag(id, name, color) => self.update_tag(id, name, color),
+            Action::DeleteTag(id) => self.delete_tag(id),
+            Action::MoveCategory(name, direction) => self.move_category(&name, direction),
+            Action::MoveItem(category, item, direction) => {
+                self.move_item_in_order(&category, &item, direction)
+            }
         };
     }
 
@@ -131,8 +157,18 @@ impl WeightedScoreTracker {
     }
 
     /// 項目追加
-    fn add_item(&mut self, cat_name: String, name: String, decay_str: String) {
-        if let Err(err) = self.service.add_item(&cat_name, name, &decay_str) {
+    fn add_item(
+        &mut self,
+        cat_name: String,
+        name: String,
+        subtitle: String,
+        decay_str: String,
+        tag_ids: Vec<crate::domain::TagId>,
+    ) {
+        if let Err(err) = self
+            .service
+            .add_item(&cat_name, name, subtitle, &decay_str, tag_ids)
+        {
             self.state.error_message = Some(err.to_string());
         }
     }
@@ -148,18 +184,69 @@ impl WeightedScoreTracker {
     }
 
     /// 項目の更新処理
+    #[allow(clippy::too_many_arguments)]
     fn update_item(
         &mut self,
         old_cat: String,
         old_item: String,
         new_cat: String,
         new_item: String,
+        subtitle: String,
         decay_str: String,
+        tag_ids: Vec<crate::domain::TagId>,
     ) {
         let old_loc = (old_cat.as_str(), old_item.as_str());
         let new_loc = (new_cat.as_str(), new_item.as_str());
 
-        if let Err(err) = self.service.update_item(old_loc, new_loc, &decay_str) {
+        if let Err(err) = self
+            .service
+            .update_item(old_loc, new_loc, subtitle, &decay_str, tag_ids)
+        {
+            self.state.error_message = Some(err.to_string());
+        }
+    }
+
+    fn create_tag(&mut self, name: String, color: [u8; 3]) {
+        match self.service.create_tag(name, color) {
+            Ok(_) => self.open_tag_manager(),
+            Err(err) => self.state.error_message = Some(err.to_string()),
+        }
+    }
+
+    fn update_tag(&mut self, id: crate::domain::TagId, name: String, color: [u8; 3]) {
+        match self.service.update_tag(id, name, color) {
+            Ok(()) => self.open_tag_manager(),
+            Err(err) => self.state.error_message = Some(err.to_string()),
+        }
+    }
+
+    fn delete_tag(&mut self, id: crate::domain::TagId) {
+        if let Err(err) = self.service.delete_tag(id) {
+            self.state.error_message = Some(err.to_string());
+        } else {
+            self.state.selected_tag_ids.remove(&id);
+            self.open_tag_manager();
+        }
+    }
+
+    fn open_tag_manager(&mut self) {
+        let tags = self.service.model().tags().values().cloned().collect();
+        self.modal_layer.open(TagManagerModal::new(tags));
+    }
+
+    fn move_category(&mut self, name: &str, direction: crate::domain::MoveDirection) {
+        if let Err(err) = self.service.move_category(name, direction) {
+            self.state.error_message = Some(err.to_string());
+        }
+    }
+
+    fn move_item_in_order(
+        &mut self,
+        category: &str,
+        item: &str,
+        direction: crate::domain::MoveDirection,
+    ) {
+        if let Err(err) = self.service.move_item_in_order(category, item, direction) {
             self.state.error_message = Some(err.to_string());
         }
     }
@@ -192,9 +279,9 @@ impl eframe::App for WeightedScoreTracker {
         let is_modal_open = self.modal_layer.is_open() || self.state.error_message.is_some();
         let is_panel_enabled = !is_modal_open; // 開いている場合は無効化
 
-        let side_act = self
-            .side_panel
-            .show(ctx, self.service.model(), is_panel_enabled);
+        let side_act =
+            self.side_panel
+                .show(ctx, self.service.model(), &mut self.state, is_panel_enabled);
         let central_act = self
             .central_panel
             .show(ctx, self.service.model(), is_panel_enabled);
