@@ -517,21 +517,14 @@ fn item_tooltip(item_name: &str, item: &ItemData, tags: &HashMap<TagId, TagData>
         .iter()
         .filter_map(|id| tags.get(id).map(|tag| tag.name.as_str()))
         .collect();
-    let subtitle = if item.subtitle.is_empty() {
-        "メモなし"
-    } else {
-        &item.subtitle
-    };
-    if tag_names.is_empty() {
-        format!("{}\n{}", item_name, subtitle)
-    } else {
-        format!(
-            "{}\n{}\nタグ: {}",
-            item_name,
-            subtitle,
-            tag_names.join(", ")
-        )
+    let mut lines = vec![item_name.to_string()];
+    if !item.subtitle.is_empty() {
+        lines.push(item.subtitle.clone());
     }
+    if !tag_names.is_empty() {
+        lines.push(format!("タグ: {}", tag_names.join(", ")));
+    }
+    lines.join("\n")
 }
 
 #[cfg(test)]
@@ -566,6 +559,23 @@ mod tests {
         assert!(item_matches_query("Readme", &data, &tags, "read"));
         assert!(item_matches_query("Readme", &data, &tags, "WEEKLY"));
         assert!(item_matches_query("Readme", &data, &tags, "urgent"));
+    }
+
+    #[test]
+    fn tooltip_omits_the_memo_line_when_memo_is_empty() {
+        let tags = HashMap::from([(
+            1,
+            TagData {
+                id: 1,
+                name: "Tag".to_string(),
+                color: [0, 0, 0],
+            },
+        )]);
+        let (_, without_tags) = item("Item", "", Vec::new());
+        let (_, with_tag) = item("Item", "", vec![1]);
+
+        assert_eq!(item_tooltip("Item", &without_tags, &tags), "Item");
+        assert_eq!(item_tooltip("Item", &with_tag, &tags), "Item\nタグ: Tag");
     }
 
     #[test]
