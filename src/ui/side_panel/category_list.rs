@@ -7,6 +7,8 @@ use eframe::egui::{self, Align, Layout, Sense, UiBuilder, UiKind};
 use std::collections::{HashMap, HashSet};
 
 pub const ITEM_ROW_HEIGHT: f32 = 44.0;
+const ITEM_MEMO_FONT_SIZE: f32 = 12.0;
+const ITEM_TEXT_SPACING: f32 = 2.0;
 const TAG_MARKER_WIDTH: f32 = 16.0;
 const TAG_ITEM_SPACING: f32 = 3.0;
 const HIDDEN_TAGS_WIDTH: f32 = 28.0;
@@ -365,6 +367,7 @@ fn draw_single_item(
                 egui::vec2(info_width, ITEM_ROW_HEIGHT - 4.0),
                 Layout::top_down(Align::Min),
                 |ui| {
+                    ui.spacing_mut().item_spacing.y = ITEM_TEXT_SPACING;
                     ui.add(
                         egui::Label::new(egui::RichText::new(item_name).strong())
                             .truncate()
@@ -376,9 +379,13 @@ fn draw_single_item(
                         &item.subtitle
                     };
                     ui.add(
-                        egui::Label::new(egui::RichText::new(subtitle).weak())
-                            .truncate()
-                            .halign(Align::Min),
+                        egui::Label::new(
+                            egui::RichText::new(subtitle)
+                                .weak()
+                                .size(ITEM_MEMO_FONT_SIZE),
+                        )
+                        .truncate()
+                        .halign(Align::Min),
                     );
                 },
             );

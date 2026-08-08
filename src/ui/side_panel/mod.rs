@@ -5,9 +5,7 @@ use crate::domain::{TagData, TrackerModel};
 use crate::ui::state::{ItemSort, UiState};
 use eframe::egui::{self, Align, Layout};
 
-const DEFAULT_PANEL_WIDTH: f32 = 320.0;
-const MIN_PANEL_WIDTH: f32 = 220.0;
-const MAX_PANEL_WIDTH: f32 = 420.0;
+const SIDE_PANEL_WIDTH: f32 = 320.0;
 
 pub struct SidePanel {}
 
@@ -26,10 +24,8 @@ impl SidePanel {
         let mut action = None;
 
         egui::SidePanel::left("side_panel")
-            .resizable(true)
-            .default_width(DEFAULT_PANEL_WIDTH)
-            .min_width(MIN_PANEL_WIDTH)
-            .max_width(MAX_PANEL_WIDTH)
+            .resizable(false)
+            .exact_width(SIDE_PANEL_WIDTH)
             .show(ctx, |ui| {
                 if !enabled {
                     ui.disable();
