@@ -27,6 +27,14 @@ pub struct ItemData {
     pub scores: Vec<ScoreEntry>,
     pub decay_rate: f64,
 
+    /// 一覧でタイトルの下に表示する任意の補足情報。
+    #[serde(default)]
+    pub subtitle: String,
+
+    /// アプリケーション共有タグへの参照。タグ実体は AppData が保持する。
+    #[serde(default)]
+    pub tag_ids: Vec<super::TagId>,
+
     // 古いJSONファイルの "created_at" も読み込む
     #[serde(alias = "created_at", default = "default_created_at")]
     // 未設定の場合、現在時刻で埋める
@@ -70,7 +78,14 @@ impl ItemData {
         validate_decay_rate_range(new_rate)?;
 
         self.decay_rate = new_rate;
+        self.updated_at = Utc::now();
         Ok(())
+    }
+
+    pub fn update_metadata(&mut self, subtitle: String, tag_ids: Vec<super::TagId>) {
+        self.subtitle = subtitle;
+        self.tag_ids = tag_ids;
+        self.updated_at = Utc::now();
     }
 }
 
@@ -83,6 +98,8 @@ mod tests {
         ItemData {
             scores: Vec::new(),
             decay_rate: 0.9,
+            subtitle: String::new(),
+            tag_ids: Vec::new(),
             updated_at: Utc::now(),
         }
     }

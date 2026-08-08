@@ -8,6 +8,10 @@ use super::{DomainError, ItemData, default_created_at};
 pub struct CategoryData {
     pub items: HashMap<String, ItemData>,
 
+    /// 手動表示順。未登録の項目は AppData::normalize で補われる。
+    #[serde(default)]
+    pub item_order: Vec<String>,
+
     #[serde(default = "default_created_at")]
     pub created_at: DateTime<Utc>,
 }
@@ -27,7 +31,13 @@ impl CategoryData {
         self.items.contains_key(item)
     }
 
-    pub fn add_item(&mut self, name: String, decay_rate: f64) -> Result<(), DomainError> {
+    pub fn add_item(
+        &mut self,
+        name: String,
+        subtitle: String,
+        decay_rate: f64,
+        tag_ids: Vec<super::TagId>,
+    ) -> Result<(), DomainError> {
         let name = name.trim().to_string();
         self.ensure_item_name_available(&name)?;
 
@@ -35,10 +45,13 @@ impl CategoryData {
         let item = ItemData {
             scores: Vec::new(),
             decay_rate,
+            subtitle,
+            tag_ids,
             updated_at: now,
         };
 
-        self.items.insert(name, item);
+        self.items.insert(name.clone(), item);
+        self.item_order.push(name);
         Ok(())
     }
 
@@ -55,19 +68,30 @@ impl CategoryData {
         }
         self.ensure_item_name_available(&new_name)?;
 
-        let item = self
+        let mut item = self
             .items
             .remove(old_name)
             .ok_or_else(|| DomainError::NotFound("変更元の項目が見つかりません。".to_string()))?;
 
-        self.items.insert(new_name, item);
+        item.updated_at = Utc::now();
+        self.items.insert(new_name.clone(), item);
+        if let Some(entry) = self
+            .item_order
+            .iter_mut()
+            .find(|entry| entry.as_str() == old_name)
+        {
+            *entry = new_name;
+        }
         Ok(())
     }
 
     pub fn remove_item(&mut self, item_name: &str) -> Result<ItemData, DomainError> {
-        self.items
+        let item = self
+            .items
             .remove(item_name)
-            .ok_or_else(|| DomainError::NotFound("削除対象の項目が見つかりません。".to_string()))
+            .ok_or_else(|| DomainError::NotFound("削除対象の項目が見つかりません。".to_string()))?;
+        self.item_order.retain(|name| name != item_name);
+        Ok(item)
     }
 }
 
@@ -78,6 +102,7 @@ mod tests {
     fn empty_category() -> CategoryData {
         CategoryData {
             items: HashMap::new(),
+            item_order: Vec::new(),
             created_at: Utc::now(),
         }
     }
@@ -86,10 +111,14 @@ mod tests {
     fn add_item_trims_name_and_rejects_duplicate() {
         // 項目名の前後空白が除去され、同名項目の追加が拒否されることを確認する。
         let mut category = empty_category();
-        category.add_item("  A  ".to_string(), 0.9).unwrap();
+        category
+            .add_item("  A  ".to_string(), String::new(), 0.9, Vec::new())
+            .unwrap();
         assert!(category.item_exists("A"));
 
-        let err = category.add_item("A".to_string(), 0.9).unwrap_err();
+        let err = category
+            .add_item("A".to_string(), String::new(), 0.9, Vec::new())
+            .unwrap_err();
         assert!(matches!(err, DomainError::AlreadyExists(_)));
     }
 
@@ -97,7 +126,9 @@ mod tests {
     fn rename_item_validates_and_moves_entry() {
         // 項目名変更でエントリが移動し、空名と不存在項目がエラーになることを確認する。
         let mut category = empty_category();
-        category.add_item("Old".to_string(), 0.9).unwrap();
+        category
+            .add_item("Old".to_string(), String::new(), 0.9, Vec::new())
+            .unwrap();
 
         category.rename_item("Old", "  New  ".to_string()).unwrap();
         assert!(category.item_exists("New"));

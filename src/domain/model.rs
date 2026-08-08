@@ -1,6 +1,6 @@
 use crate::domain::error::DomainError;
 
-use super::{AppData, ItemData, SelectionState};
+use super::{AppData, ItemData, MoveDirection, SelectionState, TagData, TagId};
 
 /// アプリケーションのドメインロジックと状態を一元管理するモデル
 pub struct TrackerModel {
@@ -9,7 +9,8 @@ pub struct TrackerModel {
 }
 
 impl TrackerModel {
-    pub fn new(data: AppData) -> Self {
+    pub fn new(mut data: AppData) -> Self {
+        data.normalize();
         Self {
             data,
             selection: SelectionState::default(),
@@ -56,9 +57,12 @@ impl TrackerModel {
         &mut self,
         cat_name: &str,
         item_name: String,
+        subtitle: String,
         decay: f64,
+        tag_ids: Vec<TagId>,
     ) -> Result<(), DomainError> {
-        self.data.add_item(cat_name, item_name, decay)
+        self.data
+            .add_item(cat_name, item_name, subtitle, decay, tag_ids)
     }
 
     pub fn remove_item(&mut self, cat_name: &str, item_name: &str) -> Result<(), DomainError> {
@@ -77,7 +81,9 @@ impl TrackerModel {
         &mut self,
         old_loc: (&str, &str),
         new_loc: (&str, &str),
+        subtitle: String,
         decay: f64,
+        tag_ids: Vec<TagId>,
     ) -> Result<(), DomainError> {
         let (old_cat, old_item) = old_loc;
         let (new_cat, new_item) = new_loc;
@@ -87,6 +93,7 @@ impl TrackerModel {
         temp_data.move_item(old_cat, new_cat, old_item)?;
         temp_data.rename_item(new_cat, old_item, new_item.to_string())?;
         temp_data.update_decay(new_cat, new_item, decay)?;
+        temp_data.update_item_metadata(new_cat, new_item, subtitle, tag_ids)?;
 
         // エラーが発生しなければ、上書き
         self.data = temp_data;
@@ -121,6 +128,44 @@ impl TrackerModel {
         Ok(())
     }
 
+    pub fn create_tag(&mut self, name: String, color: [u8; 3]) -> Result<TagId, DomainError> {
+        self.data.create_tag(name, color)
+    }
+
+    pub fn update_tag(
+        &mut self,
+        id: TagId,
+        name: String,
+        color: [u8; 3],
+    ) -> Result<(), DomainError> {
+        self.data.update_tag(id, name, color)
+    }
+
+    pub fn delete_tag(&mut self, id: TagId) -> Result<(), DomainError> {
+        self.data.delete_tag(id)
+    }
+
+    pub fn tags(&self) -> &std::collections::HashMap<TagId, TagData> {
+        &self.data.tags
+    }
+
+    pub fn move_category(
+        &mut self,
+        name: &str,
+        direction: MoveDirection,
+    ) -> Result<(), DomainError> {
+        self.data.move_category(name, direction)
+    }
+
+    pub fn move_item_in_order(
+        &mut self,
+        category: &str,
+        item: &str,
+        direction: MoveDirection,
+    ) -> Result<(), DomainError> {
+        self.data.move_item_in_order(category, item, direction)
+    }
+
     // 選択操作
     pub fn select_item(&mut self, cat: String, item: String) {
         self.selection.category = Some(cat);
@@ -137,7 +182,9 @@ mod tests {
         let mut model = TrackerModel::new(AppData::default());
         model.add_category("A".to_string()).unwrap();
         model.add_category("B".to_string()).unwrap();
-        model.add_item("A", "item1".to_string(), 0.9).unwrap();
+        model
+            .add_item("A", "item1".to_string(), String::new(), 0.9, vec![])
+            .unwrap();
         model
     }
 
@@ -190,12 +237,19 @@ mod tests {
         model.select_item("A".to_string(), "item1".to_string());
 
         model
-            .update_item(("A", "item1"), ("B", "item2"), 0.6)
+            .update_item(
+                ("A", "item1"),
+                ("B", "item2"),
+                "subtitle".to_string(),
+                0.6,
+                vec![],
+            )
             .unwrap();
 
         assert!(model.get_item("A", "item1").is_err());
         let moved = model.get_item("B", "item2").unwrap();
         assert_eq!(moved.decay_rate, 0.6);
+        assert_eq!(moved.subtitle, "subtitle");
         assert_eq!(model.selection.category.as_deref(), Some("B"));
         assert_eq!(model.selection.item.as_deref(), Some("item2"));
     }
@@ -206,7 +260,13 @@ mod tests {
         let mut model = seed_model();
 
         let err = model
-            .update_item(("A", "item1"), ("MissingCat", "item2"), 0.5)
+            .update_item(
+                ("A", "item1"),
+                ("MissingCat", "item2"),
+                String::new(),
+                0.5,
+                vec![],
+            )
             .unwrap_err();
         assert!(matches!(err, DomainError::NotFound(_)));
 
