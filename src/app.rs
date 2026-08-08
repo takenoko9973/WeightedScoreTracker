@@ -25,7 +25,9 @@ pub struct WeightedScoreTracker {
 }
 
 impl WeightedScoreTracker {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        disable_label_selection(&cc.egui_ctx);
+
         let mut state = UiState::default();
 
         let service = match TrackerService::new(JsonFileStore::new(DATA_FILENAME)) {
@@ -273,6 +275,14 @@ impl WeightedScoreTracker {
     }
 }
 
+fn disable_label_selection(ctx: &egui::Context) {
+    // システムテーマ切替後も表示専用ラベルを選択不可に保つため、両テーマのスタイルへ適用する。
+    ctx.all_styles_mut(|style| {
+        style.interaction.selectable_labels = false;
+        style.interaction.multi_widget_text_select = false;
+    });
+}
+
 impl eframe::App for WeightedScoreTracker {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // モーダルが開いているかどうか（通常モーダル or エラーメッセージ）
@@ -292,6 +302,24 @@ impl eframe::App for WeightedScoreTracker {
 
         if let Some(act) = action {
             self.handle_action(act);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn label_selection_is_disabled_for_both_themes() {
+        let ctx = egui::Context::default();
+
+        disable_label_selection(&ctx);
+
+        for theme in [egui::Theme::Dark, egui::Theme::Light] {
+            let interaction = &ctx.style_of(theme).interaction;
+            assert!(!interaction.selectable_labels);
+            assert!(!interaction.multi_widget_text_select);
         }
     }
 }

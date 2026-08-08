@@ -5,6 +5,10 @@ use crate::domain::{TagData, TagId};
 use crate::utils::ime::ImeFocusExtension;
 use eframe::egui;
 
+const MODAL_DEFAULT_WIDTH: f32 = 360.0;
+const MODAL_MAX_WIDTH: f32 = 420.0;
+const EDIT_FIELD_WIDTH: f32 = 240.0;
+
 pub struct EditItemModal {
     target_cat: String,
     target_item: String,
@@ -51,6 +55,18 @@ impl EditItemModal {
             self.selected_tag_ids.retain(|tag_id| *tag_id != id);
         }
     }
+
+    fn build_update_action(&self) -> Action {
+        Action::UpdateItem(
+            self.target_cat.clone(),
+            self.target_item.clone(),
+            self.input_cat.clone(),
+            self.input_item.clone(),
+            self.input_subtitle.clone(),
+            self.input_decay.clone(),
+            self.selected_tag_ids.clone(),
+        )
+    }
 }
 
 impl Modal for EditItemModal {
@@ -60,6 +76,8 @@ impl Modal for EditItemModal {
         egui::Window::new("項目編集")
             .collapsible(false)
             .resizable(false)
+            .default_width(MODAL_DEFAULT_WIDTH)
+            .max_width(MODAL_MAX_WIDTH)
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
                 egui::Grid::new("edit_item_grid")
@@ -68,6 +86,8 @@ impl Modal for EditItemModal {
                     .show(ui, |ui| {
                         ui.label("カテゴリ:");
                         egui::ComboBox::from_id_salt("edit_item_category_select")
+                            .width(EDIT_FIELD_WIDTH)
+                            .wrap_mode(egui::TextWrapMode::Truncate)
                             .selected_text(self.input_cat.clone())
                             .show_ui(ui, |ui| {
                                 for cat in &self.available_categories {
@@ -77,17 +97,26 @@ impl Modal for EditItemModal {
                         ui.end_row();
 
                         ui.label("項目名:");
-                        let response = ui.text_edit_singleline(&mut self.input_item);
+                        let response = ui.add_sized(
+                            [EDIT_FIELD_WIDTH, ui.spacing().interact_size.y],
+                            egui::TextEdit::singleline(&mut self.input_item),
+                        );
                         response.handle_ime_focus(ui);
                         ui.end_row();
 
-                        ui.label("補足:");
-                        ui.text_edit_singleline(&mut self.input_subtitle);
+                        ui.label("メモ:");
+                        ui.add_sized(
+                            [EDIT_FIELD_WIDTH, ui.spacing().interact_size.y],
+                            egui::TextEdit::singleline(&mut self.input_subtitle),
+                        );
                         ui.end_row();
 
                         ui.label("減衰率:");
                         ui.vertical(|ui| {
-                            ui.text_edit_singleline(&mut self.input_decay);
+                            ui.add_sized(
+                                [EDIT_FIELD_WIDTH, ui.spacing().interact_size.y],
+                                egui::TextEdit::singleline(&mut self.input_decay),
+                            );
                             ui.label(
                                 egui::RichText::new(format!(
                                     "({:.2} - {:.2})",
@@ -117,7 +146,17 @@ impl Modal for EditItemModal {
                                     ),
                                     "●",
                                 );
-                                changed = ui.checkbox(&mut selected, &tag.name).changed();
+                                let checkbox_width = ui.available_width();
+                                let checkbox_height = ui.spacing().interact_size.y;
+                                ui.scope(|ui| {
+                                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                                    changed = ui
+                                        .add_sized(
+                                            [checkbox_width, checkbox_height],
+                                            egui::Checkbox::new(&mut selected, &tag.name),
+                                        )
+                                        .changed();
+                                });
                             });
                             if changed {
                                 self.toggle_tag(tag.id, selected);
@@ -129,15 +168,7 @@ impl Modal for EditItemModal {
 
                 ui.horizontal(|ui| {
                     if ui.button("保存").clicked() {
-                        result = ModalResult::Dispatch(Action::UpdateItem(
-                            self.target_cat.clone(),
-                            self.target_item.clone(),
-                            self.input_cat.clone(),
-                            self.input_item.clone(),
-                            self.input_subtitle.clone(),
-                            self.input_decay.clone(),
-                            self.selected_tag_ids.clone(),
-                        ));
+                        result = ModalResult::Dispatch(self.build_update_action());
                     }
                     if ui.button("キャンセル").clicked() {
                         result = ModalResult::Close;
@@ -146,5 +177,43 @@ impl Modal for EditItemModal {
             });
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tag(id: TagId, name: &str) -> TagData {
+        TagData {
+            id,
+            name: name.to_string(),
+            color: [1, 2, 3],
+        }
+    }
+
+    #[test]
+    fn current_tags_are_loaded_and_can_be_added_or_removed() {
+        let mut modal = EditItemModal::new(
+            "Cat".to_string(),
+            "Item".to_string(),
+            0.9,
+            String::new(),
+            vec![1],
+            vec!["Cat".to_string()],
+            vec![tag(1, "First"), tag(2, "Second")],
+        );
+
+        assert_eq!(modal.selected_tag_ids, vec![1]);
+        modal.toggle_tag(2, true);
+        modal.toggle_tag(1, false);
+
+        assert_eq!(modal.selected_tag_ids, vec![2]);
+
+        let action = modal.build_update_action();
+        match action {
+            Action::UpdateItem(_, _, _, _, _, _, tag_ids) => assert_eq!(tag_ids, vec![2]),
+            other => panic!("unexpected action: {other:?}"),
+        }
     }
 }

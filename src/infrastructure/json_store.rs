@@ -76,6 +76,8 @@ impl DataStore for JsonFileStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::TrackerService;
+    use crate::domain::AppData;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_path(name: &str) -> PathBuf {
@@ -84,6 +86,25 @@ mod tests {
             .expect("time went backwards")
             .as_nanos();
         std::env::temp_dir().join(format!("{name}-{unique}.json"))
+    }
+
+    struct TempJsonFile {
+        path: PathBuf,
+    }
+
+    impl TempJsonFile {
+        fn new(name: &str) -> Self {
+            Self {
+                path: unique_path(name),
+            }
+        }
+    }
+
+    impl Drop for TempJsonFile {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.path);
+            let _ = fs::remove_file(self.path.with_extension("json.tmp"));
+        }
     }
 
     #[test]
@@ -144,5 +165,56 @@ mod tests {
         assert!(matches!(result, Err(AppError::Persistence(_))));
 
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn updated_item_tags_survive_service_reload() {
+        // サービス経由で項目タグを入れ替えた後、JSON再読込でも補足情報とタグ参照が保持されることを確認する。
+        let temp_file = TempJsonFile::new("weighted-score-tag-update");
+        let path = &temp_file.path;
+
+        let mut data = AppData::default();
+        data.add_category("test".to_string())
+            .expect("failed to add category for test");
+        let first = data
+            .create_tag("first".to_string(), [255, 0, 0])
+            .expect("failed to add first tag for test");
+        let second = data
+            .create_tag("second".to_string(), [0, 0, 255])
+            .expect("failed to add second tag for test");
+        data.add_item(
+            "test",
+            "item".to_string(),
+            "before".to_string(),
+            0.9,
+            vec![first],
+        )
+        .expect("failed to add item for test");
+
+        JsonFileStore::new(path)
+            .save(&data)
+            .expect("failed to seed test data");
+
+        let mut service =
+            TrackerService::new(JsonFileStore::new(path)).expect("failed to load seeded test data");
+        service
+            .update_item(
+                ("test", "item"),
+                ("test", "item"),
+                "after".to_string(),
+                "0.9",
+                vec![second],
+            )
+            .expect("failed to update item for test");
+        drop(service);
+
+        let service = TrackerService::new(JsonFileStore::new(path))
+            .expect("failed to reload updated test data");
+        let item = service
+            .model()
+            .get_item("test", "item")
+            .expect("expected updated item");
+        assert_eq!(item.subtitle, "after");
+        assert_eq!(item.tag_ids, vec![second]);
     }
 }

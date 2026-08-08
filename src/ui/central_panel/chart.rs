@@ -70,7 +70,7 @@ impl WeightedScoreChart {
                     .width(width)
                     .name(format!("{}回目", i + 1))
                     .fill(bar_color)
-                    .stroke(egui::Stroke::new(1.0, base_color));
+                    .stroke(egui::Stroke::new(1.0_f32, base_color));
 
                 boundaries.push(current_x + weight);
                 current_x += width;

@@ -5,6 +5,9 @@ use crate::domain::{TagData, TagId};
 use crate::utils::ime::ImeFocusExtension;
 use eframe::egui;
 
+const MODAL_DEFAULT_WIDTH: f32 = 360.0;
+const MODAL_MAX_WIDTH: f32 = 420.0;
+
 pub struct AddItemModal {
     target_cat: String,
     input_item: String,
@@ -45,22 +48,34 @@ impl Modal for AddItemModal {
         egui::Window::new("項目追加")
             .collapsible(false)
             .resizable(false)
+            .default_width(MODAL_DEFAULT_WIDTH)
+            .max_width(MODAL_MAX_WIDTH)
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                ui.label(format!("追加先カテゴリ: {}", self.target_cat));
+                let target_width = ui.available_width();
+                ui.add_sized(
+                    [target_width, ui.spacing().interact_size.y],
+                    egui::Label::new(format!("追加先カテゴリ: {}", self.target_cat)).truncate(),
+                );
 
                 ui.label("項目名:");
                 let response = ui.text_edit_singleline(&mut self.input_item);
                 response.handle_ime_focus(ui);
 
-                ui.label("補足:");
-                ui.text_edit_singleline(&mut self.input_subtitle);
+                ui.label("メモ:");
+                ui.add_sized(
+                    [ui.available_width(), ui.spacing().interact_size.y],
+                    egui::TextEdit::singleline(&mut self.input_subtitle),
+                );
 
                 ui.label(format!(
                     "減衰率 ({:.2} - {:.2}):",
                     MIN_DECAY_RATE, MAX_DECAY_RATE
                 ));
-                ui.text_edit_singleline(&mut self.input_decay);
+                ui.add_sized(
+                    [ui.available_width(), ui.spacing().interact_size.y],
+                    egui::TextEdit::singleline(&mut self.input_decay),
+                );
 
                 ui.label("タグ:");
                 egui::ScrollArea::vertical()
@@ -78,7 +93,17 @@ impl Modal for AddItemModal {
                                     ),
                                     "●",
                                 );
-                                changed = ui.checkbox(&mut selected, &tag.name).changed();
+                                let checkbox_width = ui.available_width();
+                                let checkbox_height = ui.spacing().interact_size.y;
+                                ui.scope(|ui| {
+                                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                                    changed = ui
+                                        .add_sized(
+                                            [checkbox_width, checkbox_height],
+                                            egui::Checkbox::new(&mut selected, &tag.name),
+                                        )
+                                        .changed();
+                                });
                             });
                             if changed {
                                 self.toggle_tag(tag.id, selected);

@@ -3,7 +3,11 @@ pub mod category_list;
 use crate::action::Action;
 use crate::domain::{TagData, TrackerModel};
 use crate::ui::state::{ItemSort, UiState};
-use eframe::egui;
+use eframe::egui::{self, Align, Layout};
+
+const DEFAULT_PANEL_WIDTH: f32 = 320.0;
+const MIN_PANEL_WIDTH: f32 = 220.0;
+const MAX_PANEL_WIDTH: f32 = 420.0;
 
 pub struct SidePanel {}
 
@@ -23,6 +27,9 @@ impl SidePanel {
 
         egui::SidePanel::left("side_panel")
             .resizable(true)
+            .default_width(DEFAULT_PANEL_WIDTH)
+            .min_width(MIN_PANEL_WIDTH)
+            .max_width(MAX_PANEL_WIDTH)
             .show(ctx, |ui| {
                 if !enabled {
                     ui.disable();
@@ -54,19 +61,21 @@ fn show_header(
 ) -> Option<Action> {
     let mut action = None;
     let button_width = 28.0;
-    let search_width = (ui.available_width() - button_width * 4.0 - 12.0).max(70.0);
 
-    ui.horizontal(|ui| {
-        ui.add_sized(
-            [search_width, 26.0],
-            egui::TextEdit::singleline(&mut state.search_query).hint_text("項目・タグを検索"),
-        );
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        if ui
+            .add_sized([button_width, 26.0], egui::Button::new("＋"))
+            .on_hover_text("カテゴリを追加")
+            .clicked()
+        {
+            action = Some(Action::ShowAddCategoryModal);
+        }
 
-        ui.menu_button("⇅", |ui| {
-            ui.set_min_width(110.0);
-            ui.selectable_value(&mut state.item_sort, ItemSort::Recent, "最近更新");
-            ui.selectable_value(&mut state.item_sort, ItemSort::Name, "名前");
-            ui.selectable_value(&mut state.item_sort, ItemSort::Manual, "手動");
+        ui.menu_button("⋯", |ui| {
+            if ui.button("タグを管理").clicked() {
+                action = Some(Action::ShowTagManagerModal);
+                ui.close_kind(egui::UiKind::Menu);
+            }
         });
 
         let filter_label = if state.selected_tag_ids.is_empty() {
@@ -102,20 +111,18 @@ fn show_header(
             }
         });
 
-        ui.menu_button("⋯", |ui| {
-            if ui.button("タグを管理").clicked() {
-                action = Some(Action::ShowTagManagerModal);
-                ui.close_kind(egui::UiKind::Menu);
-            }
+        ui.menu_button("⇅", |ui| {
+            ui.set_min_width(110.0);
+            ui.selectable_value(&mut state.item_sort, ItemSort::Recent, "最近更新");
+            ui.selectable_value(&mut state.item_sort, ItemSort::Name, "名前");
+            ui.selectable_value(&mut state.item_sort, ItemSort::Manual, "手動");
         });
 
-        if ui
-            .add_sized([button_width, 26.0], egui::Button::new("＋"))
-            .on_hover_text("カテゴリを追加")
-            .clicked()
-        {
-            action = Some(Action::ShowAddCategoryModal);
-        }
+        let search_width = ui.available_width();
+        ui.add_sized(
+            [search_width, 26.0],
+            egui::TextEdit::singleline(&mut state.search_query).hint_text("項目・メモ・タグを検索"),
+        );
     });
 
     action
