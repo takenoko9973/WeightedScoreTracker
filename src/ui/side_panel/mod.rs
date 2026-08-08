@@ -6,6 +6,8 @@ use crate::ui::state::{ItemSort, UiState};
 use eframe::egui::{self, Align, Layout};
 
 const SIDE_PANEL_WIDTH: f32 = 320.0;
+const SIDE_PANEL_MIN_WIDTH: f32 = 220.0;
+const SIDE_PANEL_MAX_WIDTH: f32 = 420.0;
 
 pub struct SidePanel {}
 
@@ -24,8 +26,10 @@ impl SidePanel {
         let mut action = None;
 
         egui::SidePanel::left("side_panel")
-            .resizable(false)
-            .exact_width(SIDE_PANEL_WIDTH)
+            .resizable(true)
+            .default_width(SIDE_PANEL_WIDTH)
+            .min_width(SIDE_PANEL_MIN_WIDTH)
+            .max_width(SIDE_PANEL_MAX_WIDTH)
             .show(ctx, |ui| {
                 if !enabled {
                     ui.disable();
