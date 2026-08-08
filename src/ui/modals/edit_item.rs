@@ -1,4 +1,4 @@
-use super::{Modal, ModalResult};
+use super::{Modal, ModalResult, tag_chip};
 use crate::action::Action;
 use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
 use crate::domain::{TagData, TagId};
@@ -134,34 +134,14 @@ impl Modal for EditItemModal {
                 egui::ScrollArea::vertical()
                     .max_height(120.0)
                     .show(ui, |ui| {
-                        for tag in self.available_tags.clone() {
-                            let mut selected = self.selected_tag_ids.contains(&tag.id);
-                            let mut changed = false;
-                            ui.horizontal(|ui| {
-                                ui.colored_label(
-                                    egui::Color32::from_rgb(
-                                        tag.color[0],
-                                        tag.color[1],
-                                        tag.color[2],
-                                    ),
-                                    "●",
-                                );
-                                let checkbox_width = ui.available_width();
-                                let checkbox_height = ui.spacing().interact_size.y;
-                                ui.scope(|ui| {
-                                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                                    changed = ui
-                                        .add_sized(
-                                            [checkbox_width, checkbox_height],
-                                            egui::Checkbox::new(&mut selected, &tag.name),
-                                        )
-                                        .changed();
-                                });
-                            });
-                            if changed {
-                                self.toggle_tag(tag.id, selected);
+                        ui.horizontal_wrapped(|ui| {
+                            for tag in self.available_tags.clone() {
+                                let selected = self.selected_tag_ids.contains(&tag.id);
+                                if tag_chip(ui, &tag, selected).clicked() {
+                                    self.toggle_tag(tag.id, !selected);
+                                }
                             }
-                        }
+                        });
                     });
 
                 ui.add_space(15.0);
