@@ -271,8 +271,7 @@ fn draw_single_category(
                     egui::vec2(name_width, ui.spacing().interact_size.y),
                     Layout::left_to_right(Align::Center),
                     |ui| {
-                        ui.add_sized(
-                            [ui.available_width(), ui.spacing().interact_size.y],
+                        ui.add(
                             egui::Label::new(egui::RichText::new(cat_name).strong())
                                 .truncate()
                                 .sense(Sense::hover())
@@ -366,18 +365,20 @@ fn draw_single_item(
                 egui::vec2(info_width, ITEM_ROW_HEIGHT - 4.0),
                 Layout::top_down(Align::Min),
                 |ui| {
-                    ui.add_sized(
-                        [info_width, 20.0],
-                        egui::Label::new(egui::RichText::new(item_name).strong()).truncate(),
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(item_name).strong())
+                            .truncate()
+                            .halign(Align::Min),
                     );
                     let subtitle = if item.subtitle.is_empty() {
                         " "
                     } else {
                         &item.subtitle
                     };
-                    ui.add_sized(
-                        [info_width, 18.0],
-                        egui::Label::new(egui::RichText::new(subtitle).weak()).truncate(),
+                    ui.add(
+                        egui::Label::new(egui::RichText::new(subtitle).weak())
+                            .truncate()
+                            .halign(Align::Min),
                     );
                 },
             );
