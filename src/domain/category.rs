@@ -68,12 +68,11 @@ impl CategoryData {
         }
         self.ensure_item_name_available(&new_name)?;
 
-        let mut item = self
+        let item = self
             .items
             .remove(old_name)
             .ok_or_else(|| DomainError::NotFound("変更元の項目が見つかりません。".to_string()))?;
 
-        item.updated_at = Utc::now();
         self.items.insert(new_name.clone(), item);
         if let Some(entry) = self
             .item_order
@@ -129,10 +128,12 @@ mod tests {
         category
             .add_item("Old".to_string(), String::new(), 0.9, Vec::new())
             .unwrap();
+        let updated_at = category.items["Old"].updated_at;
 
         category.rename_item("Old", "  New  ".to_string()).unwrap();
         assert!(category.item_exists("New"));
         assert!(!category.item_exists("Old"));
+        assert_eq!(category.items["New"].updated_at, updated_at);
 
         let err = category.rename_item("New", "   ".to_string()).unwrap_err();
         assert!(matches!(err, DomainError::Validation(_)));
