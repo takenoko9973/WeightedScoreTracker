@@ -34,14 +34,36 @@ pub struct StatsPoint {
 
 /// 履歴の各時点までに対する加重平均と加重標準偏差を生成する。
 pub fn calculate_stats_series(scores: &[ScoreEntry], decay_rate: f64) -> Vec<StatsPoint> {
-    scores
-        .iter()
-        .enumerate()
-        .map(|(index, _)| {
-            let (mean, std, _, _) = calculate_stats(&scores[..=index], decay_rate);
-            StatsPoint { mean, std }
-        })
-        .collect()
+    let mut series = Vec::with_capacity(scores.len());
+    let mut weight_sum = 0.0;
+    let mut mean = 0.0;
+    let mut weighted_m2 = 0.0;
+
+    for (index, entry) in scores.iter().enumerate() {
+        let score = entry.score as f64;
+        let previous_weight_sum = weight_sum * decay_rate;
+        let new_weight_sum = previous_weight_sum + 1.0;
+
+        if index == 0 {
+            mean = score;
+        } else {
+            // 直前までの全重みを減衰させてから、新しいスコアを重み1で追加する。
+            let delta = score - mean;
+            weighted_m2 =
+                weighted_m2 * decay_rate + delta * delta * previous_weight_sum / new_weight_sum;
+            mean += delta / new_weight_sum;
+        }
+
+        weight_sum = new_weight_sum;
+        // 重み付き偏差平方和を直接更新するため、分散の差し引きによる負値を生じさせない。
+        let variance = weighted_m2 / weight_sum;
+        series.push(StatsPoint {
+            mean,
+            std: variance.sqrt(),
+        });
+    }
+
+    series
 }
 
 pub struct PlotParams {
@@ -181,6 +203,24 @@ mod tests {
         assert_close(decayed[1].mean, 70.0 / 3.0);
         assert_close(equally_weighted[1].mean, 20.0);
         assert_ne!(decayed[1].mean, equally_weighted[1].mean);
+    }
+
+    #[test]
+    fn calculate_stats_series_matches_calculate_stats_for_long_history() {
+        let values: Vec<_> = (0..128_usize)
+            .map(|index| ((index * 37 + 11) % 101) as i64)
+            .collect();
+        let scores = score_entries(&values);
+        let decay_rate = 0.87;
+
+        let series = calculate_stats_series(&scores, decay_rate);
+
+        for (index, point) in series.iter().enumerate() {
+            let (expected_mean, expected_std, _, _) =
+                calculate_stats(&scores[..=index], decay_rate);
+            assert_close(point.mean, expected_mean);
+            assert_close(point.std, expected_std);
+        }
     }
 
     #[test]
