@@ -81,13 +81,7 @@ impl WeightedScoreChart {
             &history_stats,
             settings.show_std_band,
         );
-        let (min_y, max_y) = plot_y_bounds(&params, &mean_points, &band_polygons);
-        let overlays = PlotOverlays {
-            mean_points: &mean_points,
-            band_polygons: &band_polygons,
-            min_y,
-            max_y,
-        };
+        let overlays = plot_overlays(&params, &mean_points, &band_polygons);
 
         // プロット、クリック処理
         let clicked_idx = self.draw_plot(ui, bars, &boundaries, overlays);
@@ -352,27 +346,17 @@ fn band_between_points(
     ]
 }
 
-fn plot_y_bounds(
+fn plot_overlays<'a>(
     params: &PlotParams,
-    mean_points: &[[f64; 2]],
-    band_polygons: &[Vec<[f64; 2]>],
-) -> (f64, f64) {
-    let mut min_y = params.min_y;
-    let mut max_y = params.max_y;
-
-    for point in mean_points {
-        min_y = min_y.min(point[1]);
-        max_y = max_y.max(point[1]);
+    mean_points: &'a [[f64; 2]],
+    band_polygons: &'a [Vec<[f64; 2]>],
+) -> PlotOverlays<'a> {
+    PlotOverlays {
+        mean_points,
+        band_polygons,
+        min_y: params.min_y,
+        max_y: params.max_y,
     }
-
-    for polygon in band_polygons {
-        for point in polygon {
-            min_y = min_y.min(point[1]);
-            max_y = max_y.max(point[1]);
-        }
-    }
-
-    (min_y, max_y)
 }
 
 /// x座標がどのバーに属するか判定
@@ -578,17 +562,18 @@ mod tests {
     }
 
     #[test]
-    fn plot_y_bounds_include_displayed_mean_and_band() {
+    fn plot_overlays_keep_score_bounds_when_displayed_values_are_outside() {
         let params = PlotParams {
             min_y: 0.0,
             max_y: 10.0,
         };
         let mean_points = vec![[0.5, 12.0]];
         let band_polygons = vec![vec![[0.0, -2.0], [1.0, -2.0], [1.0, 20.0], [0.0, 20.0]]];
+        let overlays = plot_overlays(&params, &mean_points, &band_polygons);
 
         assert_eq!(
-            plot_y_bounds(&params, &mean_points, &band_polygons),
-            (-2.0, 20.0)
+            (overlays.min_y, overlays.max_y),
+            (params.min_y, params.max_y)
         );
     }
 }
