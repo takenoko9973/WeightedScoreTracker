@@ -25,6 +25,25 @@ pub fn calculate_stats(scores: &[ScoreEntry], decay_rate: f64) -> (f64, f64, usi
     (mean, std, n, weights)
 }
 
+/// 各時点までの履歴から得られる加重統計値。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StatsPoint {
+    pub mean: f64,
+    pub std: f64,
+}
+
+/// 履歴の各時点までに対する加重平均と加重標準偏差を生成する。
+pub fn calculate_stats_series(scores: &[ScoreEntry], decay_rate: f64) -> Vec<StatsPoint> {
+    scores
+        .iter()
+        .enumerate()
+        .map(|(index, _)| {
+            let (mean, std, _, _) = calculate_stats(&scores[..=index], decay_rate);
+            StatsPoint { mean, std }
+        })
+        .collect()
+}
+
 pub struct PlotParams {
     pub max_y: f64,
     pub min_y: f64,
@@ -99,6 +118,69 @@ mod tests {
         assert_eq!(weights, vec![0.25, 0.5, 1.0]);
         assert_close(mean, 24.285714285714285);
         assert_close(std, 7.284313590846315);
+    }
+
+    #[test]
+    fn calculate_stats_series_returns_empty_for_empty_scores() {
+        let series = calculate_stats_series(&[], 0.9);
+
+        assert!(series.is_empty());
+    }
+
+    #[test]
+    fn calculate_stats_series_returns_score_and_zero_std_for_one_score() {
+        let scores = score_entries(&[42]);
+
+        let series = calculate_stats_series(&scores, 0.9);
+
+        assert_eq!(
+            series,
+            vec![StatsPoint {
+                mean: 42.0,
+                std: 0.0
+            }]
+        );
+    }
+
+    #[test]
+    fn calculate_stats_series_is_independent_for_each_prefix() {
+        let prefix_scores = score_entries(&[10, 20]);
+        let scores_with_suffix = score_entries(&[10, 20, 100]);
+
+        let prefix_series = calculate_stats_series(&prefix_scores, 0.5);
+        let series_with_suffix = calculate_stats_series(&scores_with_suffix, 0.5);
+
+        for (prefix_point, full_point) in prefix_series.iter().zip(&series_with_suffix) {
+            assert_close(prefix_point.mean, full_point.mean);
+            assert_close(prefix_point.std, full_point.std);
+            assert!(prefix_point.mean.is_finite());
+            assert!(prefix_point.std.is_finite());
+        }
+    }
+
+    #[test]
+    fn calculate_stats_series_final_point_matches_calculate_stats() {
+        let scores = score_entries(&[10, 20, 30]);
+        let decay_rate = 0.5;
+
+        let series = calculate_stats_series(&scores, decay_rate);
+        let (mean, std, _, _) = calculate_stats(&scores, decay_rate);
+        let final_point = series.last().expect("複数スコアの系列には最終点がある");
+
+        assert_close(final_point.mean, mean);
+        assert_close(final_point.std, std);
+    }
+
+    #[test]
+    fn calculate_stats_series_reflects_decay_rate() {
+        let scores = score_entries(&[10, 30]);
+
+        let decayed = calculate_stats_series(&scores, 0.5);
+        let equally_weighted = calculate_stats_series(&scores, 1.0);
+
+        assert_close(decayed[1].mean, 70.0 / 3.0);
+        assert_close(equally_weighted[1].mean, 20.0);
+        assert_ne!(decayed[1].mean, equally_weighted[1].mean);
     }
 
     #[test]
