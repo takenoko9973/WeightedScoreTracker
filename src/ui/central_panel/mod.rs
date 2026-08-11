@@ -5,7 +5,7 @@ mod score_input;
 use crate::action::Action;
 use crate::domain::{ItemData, TrackerModel};
 use crate::logic::calculate_stats;
-use crate::ui::central_panel::chart::WeightedScoreChart;
+use crate::ui::central_panel::chart::{ChartSettings, WeightedAverageMode, WeightedScoreChart};
 use crate::ui::central_panel::history::HistoryList;
 use crate::ui::central_panel::score_input::ScoreInput;
 use crate::utils::comma_display::CommaDisplay;
@@ -19,7 +19,8 @@ fn item_settings_action(cat_name: &str, item_name: &str, clicked: bool) -> Optio
 
 pub struct CentralPanel {
     score_input_text: String,
-    show_weighted_average: bool,
+    weighted_average_mode: WeightedAverageMode,
+    show_weighted_std_band: bool,
 
     selected_index: Option<usize>,
     scroll_req_index: Option<usize>,
@@ -29,7 +30,8 @@ impl CentralPanel {
     pub fn new() -> Self {
         Self {
             score_input_text: String::new(),
-            show_weighted_average: true,
+            weighted_average_mode: WeightedAverageMode::Current,
+            show_weighted_std_band: false,
 
             selected_index: None,   // 選択中インデックス
             scroll_req_index: None, // リストに対するスクロール処理用インデックス
@@ -76,7 +78,10 @@ impl CentralPanel {
                     ui,
                     &item_data.scores,
                     item_data.decay_rate,
-                    self.show_weighted_average,
+                    ChartSettings {
+                        average_mode: self.weighted_average_mode,
+                        show_std_band: self.show_weighted_std_band,
+                    },
                     &mut self.selected_index,
                     &mut self.scroll_req_index,
                 );
@@ -100,6 +105,8 @@ impl CentralPanel {
                                         ui.add_space(INPUT_SETTINGS_GAP);
                                         let settings_action = self
                                             .draw_item_settings(ui, cat_name, item_name, item_data);
+                                        ui.add_space(INPUT_SETTINGS_GAP);
+                                        self.draw_chart_settings(ui);
                                         input_action.or(settings_action)
                                     })
                                     .inner;
@@ -135,7 +142,7 @@ impl CentralPanel {
     }
 
     fn draw_item_settings(
-        &mut self,
+        &self,
         ui: &mut egui::Ui,
         cat_name: &str,
         item_name: &str,
@@ -163,14 +170,53 @@ impl CentralPanel {
                         ui.label("減衰率");
                         ui.label(item_data.decay_rate.to_comma_fmt(2));
                         ui.end_row();
-
-                        ui.label("加重平均");
-                        ui.checkbox(&mut self.show_weighted_average, "グラフ表示");
-                        ui.end_row();
                     });
             });
 
         action
+    }
+
+    fn draw_chart_settings(&mut self, ui: &mut egui::Ui) {
+        egui::Frame::group(ui.style())
+            .inner_margin(egui::Margin::same(10))
+            .show(ui, |ui| {
+                ui.label(egui::RichText::new("グラフ設定").strong());
+                ui.add_space(6.0);
+
+                egui::Grid::new("chart_settings_summary")
+                    .num_columns(2)
+                    .spacing([12.0, 4.0])
+                    .show(ui, |ui| {
+                        ui.label("加重平均");
+                        egui::ComboBox::from_id_salt("weighted_average_mode")
+                            .selected_text(self.weighted_average_mode.label())
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.weighted_average_mode,
+                                    WeightedAverageMode::Hidden,
+                                    WeightedAverageMode::Hidden.label(),
+                                );
+                                ui.selectable_value(
+                                    &mut self.weighted_average_mode,
+                                    WeightedAverageMode::Current,
+                                    WeightedAverageMode::Current.label(),
+                                );
+                                ui.selectable_value(
+                                    &mut self.weighted_average_mode,
+                                    WeightedAverageMode::History,
+                                    WeightedAverageMode::History.label(),
+                                );
+                            });
+                        ui.end_row();
+
+                        ui.label("加重標準偏差帯");
+                        ui.add_enabled(
+                            self.weighted_average_mode != WeightedAverageMode::Hidden,
+                            egui::Checkbox::new(&mut self.show_weighted_std_band, "表示"),
+                        );
+                        ui.end_row();
+                    });
+            });
     }
 
     pub fn clear_input(&mut self) {
@@ -200,10 +246,11 @@ mod tests {
     }
 
     #[test]
-    fn central_panel_defaults_to_show_weighted_average() {
-        // パネル初期状態では加重平均表示フラグが有効になっていることを確認する。
+    fn central_panel_defaults_to_current_average_without_std_band() {
+        // パネル初期状態は既存挙動の現在値表示で、標準偏差帯は非表示になっていることを確認する。
         let panel = CentralPanel::new();
-        assert!(panel.show_weighted_average);
+        assert_eq!(panel.weighted_average_mode, WeightedAverageMode::Current);
+        assert!(!panel.show_weighted_std_band);
     }
 
     #[test]
