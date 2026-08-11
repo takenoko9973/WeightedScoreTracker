@@ -11,7 +11,8 @@ use crate::ui::central_panel::score_input::ScoreInput;
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui::{self};
 
-const INPUT_SETTINGS_GAP: f32 = 16.0;
+const INPUT_TO_ITEM_SETTINGS_GAP: f32 = 8.0;
+const ITEM_TO_CHART_SETTINGS_GAP: f32 = 8.0;
 
 fn item_settings_action(cat_name: &str, item_name: &str, clicked: bool) -> Option<Action> {
     clicked.then(|| Action::ShowEditItemModal(cat_name.to_string(), item_name.to_string()))
@@ -102,10 +103,11 @@ impl CentralPanel {
                                     .vertical(|ui| {
                                         let input_action =
                                             ScoreInput::new().show(ui, &mut self.score_input_text);
-                                        ui.add_space(INPUT_SETTINGS_GAP);
+                                        ui.add_space(INPUT_TO_ITEM_SETTINGS_GAP);
                                         let settings_action = self
                                             .draw_item_settings(ui, cat_name, item_name, item_data);
-                                        ui.add_space(INPUT_SETTINGS_GAP);
+                                        ui.add_space(ITEM_TO_CHART_SETTINGS_GAP);
+                                        ui.separator();
                                         self.draw_chart_settings(ui);
                                         input_action.or(settings_action)
                                     })
@@ -150,72 +152,54 @@ impl CentralPanel {
     ) -> Option<Action> {
         let mut action = None;
 
-        egui::Frame::group(ui.style())
-            .inner_margin(egui::Margin::same(10))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("項目設定").strong());
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let clicked = ui.button("設定を開く").clicked();
-                        action = item_settings_action(cat_name, item_name, clicked);
-                    });
-                });
-
-                ui.add_space(6.0);
-
-                egui::Grid::new("item_settings_summary")
-                    .num_columns(2)
-                    .spacing([12.0, 4.0])
-                    .show(ui, |ui| {
-                        ui.label("減衰率");
-                        ui.label(item_data.decay_rate.to_comma_fmt(2));
-                        ui.end_row();
-                    });
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("項目設定").strong());
+            ui.label(format!("減衰率 {}", item_data.decay_rate.to_comma_fmt(2)));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let clicked = ui.button("設定…").clicked();
+                action = item_settings_action(cat_name, item_name, clicked);
             });
+        });
 
         action
     }
 
     fn draw_chart_settings(&mut self, ui: &mut egui::Ui) {
-        egui::Frame::group(ui.style())
-            .inner_margin(egui::Margin::same(10))
+        ui.label(egui::RichText::new("グラフ設定").strong());
+        ui.add_space(4.0);
+
+        egui::Grid::new("chart_settings_summary")
+            .num_columns(2)
+            .spacing([12.0, 4.0])
             .show(ui, |ui| {
-                ui.label(egui::RichText::new("グラフ設定").strong());
-                ui.add_space(6.0);
-
-                egui::Grid::new("chart_settings_summary")
-                    .num_columns(2)
-                    .spacing([12.0, 4.0])
-                    .show(ui, |ui| {
-                        ui.label("加重平均");
-                        egui::ComboBox::from_id_salt("weighted_average_mode")
-                            .selected_text(self.weighted_average_mode.label())
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.weighted_average_mode,
-                                    WeightedAverageMode::Hidden,
-                                    WeightedAverageMode::Hidden.label(),
-                                );
-                                ui.selectable_value(
-                                    &mut self.weighted_average_mode,
-                                    WeightedAverageMode::Current,
-                                    WeightedAverageMode::Current.label(),
-                                );
-                                ui.selectable_value(
-                                    &mut self.weighted_average_mode,
-                                    WeightedAverageMode::History,
-                                    WeightedAverageMode::History.label(),
-                                );
-                            });
-                        ui.end_row();
-
-                        ui.label("加重標準偏差帯");
-                        ui.add_enabled(
-                            self.weighted_average_mode != WeightedAverageMode::Hidden,
-                            egui::Checkbox::new(&mut self.show_weighted_std_band, "表示"),
+                ui.label("加重平均");
+                egui::ComboBox::from_id_salt("weighted_average_mode")
+                    .selected_text(self.weighted_average_mode.label())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.weighted_average_mode,
+                            WeightedAverageMode::Hidden,
+                            WeightedAverageMode::Hidden.label(),
                         );
-                        ui.end_row();
+                        ui.selectable_value(
+                            &mut self.weighted_average_mode,
+                            WeightedAverageMode::Current,
+                            WeightedAverageMode::Current.label(),
+                        );
+                        ui.selectable_value(
+                            &mut self.weighted_average_mode,
+                            WeightedAverageMode::History,
+                            WeightedAverageMode::History.label(),
+                        );
                     });
+                ui.end_row();
+
+                ui.label("加重標準偏差帯");
+                ui.add_enabled(
+                    self.weighted_average_mode != WeightedAverageMode::Hidden,
+                    egui::Checkbox::new(&mut self.show_weighted_std_band, "表示"),
+                );
+                ui.end_row();
             });
     }
 
@@ -254,8 +238,13 @@ mod tests {
     }
 
     #[test]
-    fn input_and_settings_gap_matches_design_value() {
-        // スコア入力欄と項目設定の間隔がデザインで定義した値になっていることを確認する。
-        assert_eq!(INPUT_SETTINGS_GAP, 16.0);
+    fn settings_gaps_keep_the_compact_layout() {
+        // 設定を通常表示領域に収めやすくしつつ、入力と各設定の間隔を維持する。
+        const {
+            assert!(INPUT_TO_ITEM_SETTINGS_GAP < 16.0);
+            assert!(ITEM_TO_CHART_SETTINGS_GAP < 16.0);
+            assert!(INPUT_TO_ITEM_SETTINGS_GAP > 0.0);
+            assert!(ITEM_TO_CHART_SETTINGS_GAP > 0.0);
+        }
     }
 }
