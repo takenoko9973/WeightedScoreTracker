@@ -69,6 +69,7 @@ impl WeightedScoreChart {
         let mean_points = mean_line_points(
             settings.average_mode,
             &centers,
+            &weights,
             current_stats,
             &history_stats,
         );
@@ -249,15 +250,20 @@ fn bar_centers(weights: &[f64]) -> Vec<f64> {
 fn mean_line_points(
     mode: WeightedAverageMode,
     centers: &[f64],
+    widths: &[f64],
     current_stats: StatsPoint,
     history_stats: &[StatsPoint],
 ) -> Vec<[f64; 2]> {
     match mode {
         WeightedAverageMode::Hidden => Vec::new(),
-        WeightedAverageMode::Current => centers
-            .iter()
-            .map(|&center| [center, current_stats.mean])
-            .collect(),
+        WeightedAverageMode::Current => {
+            if widths.is_empty() {
+                Vec::new()
+            } else {
+                let total_width = widths.iter().sum();
+                vec![[0.0, current_stats.mean], [total_width, current_stats.mean]]
+            }
+        }
         WeightedAverageMode::History => centers
             .iter()
             .zip(history_stats)
@@ -280,22 +286,18 @@ fn standard_deviation_band_polygons(
 
     match mode {
         WeightedAverageMode::Hidden => Vec::new(),
-        WeightedAverageMode::Current => current_band_polygons(centers, widths, current_stats),
+        WeightedAverageMode::Current => current_band_polygons(widths, current_stats),
         WeightedAverageMode::History => history_band_polygons(centers, widths, history_stats),
     }
 }
 
-fn current_band_polygons(centers: &[f64], widths: &[f64], stats: StatsPoint) -> Vec<Vec<[f64; 2]>> {
-    let Some((&first_center, remaining_centers)) = centers.split_first() else {
+fn current_band_polygons(widths: &[f64], stats: StatsPoint) -> Vec<Vec<[f64; 2]>> {
+    if widths.is_empty() {
         return Vec::new();
-    };
+    }
 
-    let last_center = remaining_centers.last().copied().unwrap_or(first_center);
-    let polygon = if remaining_centers.is_empty() {
-        band_around_point(first_center, widths.first().copied().unwrap_or(0.0), stats)
-    } else {
-        band_between_points(first_center, stats, last_center, stats)
-    };
+    let total_width = widths.iter().sum();
+    let polygon = band_between_points(0.0, stats, total_width, stats);
 
     vec![polygon]
 }
@@ -395,22 +397,33 @@ mod tests {
     }
 
     #[test]
-    fn current_band_uses_mean_plus_or_minus_current_std() {
+    fn current_line_and_band_cover_the_full_bar_width() {
+        let centers = bar_centers(&[0.25, 0.5, 1.0]);
+        let widths = [0.25, 0.5, 1.0];
+        let current_stats = StatsPoint {
+            mean: 50.0,
+            std: 5.0,
+        };
+        let line = mean_line_points(
+            WeightedAverageMode::Current,
+            &centers,
+            &widths,
+            current_stats,
+            &[],
+        );
         let polygons = standard_deviation_band_polygons(
             WeightedAverageMode::Current,
-            &[0.5, 1.5, 2.5],
-            &[1.0, 1.0, 1.0],
-            StatsPoint {
-                mean: 50.0,
-                std: 5.0,
-            },
+            &centers,
+            &widths,
+            current_stats,
             &[],
             true,
         );
 
+        assert_eq!(line, vec![[0.0, 50.0], [1.75, 50.0]]);
         assert_eq!(
             polygons,
-            vec![vec![[0.5, 45.0], [2.5, 45.0], [2.5, 55.0], [0.5, 55.0],]]
+            vec![vec![[0.0, 45.0], [1.75, 45.0], [1.75, 55.0], [0.0, 55.0],]]
         );
     }
 
@@ -458,6 +471,7 @@ mod tests {
         let empty_line = mean_line_points(
             WeightedAverageMode::History,
             &empty_centers,
+            &[],
             StatsPoint {
                 mean: 0.0,
                 std: 0.0,
@@ -475,14 +489,38 @@ mod tests {
             &[],
             true,
         );
+        let empty_current_line = mean_line_points(
+            WeightedAverageMode::Current,
+            &empty_centers,
+            &[],
+            StatsPoint {
+                mean: 0.0,
+                std: 0.0,
+            },
+            &[],
+        );
+        let empty_current_band = standard_deviation_band_polygons(
+            WeightedAverageMode::Current,
+            &empty_centers,
+            &[],
+            StatsPoint {
+                mean: 0.0,
+                std: 0.0,
+            },
+            &[],
+            true,
+        );
 
         assert!(empty_line.is_empty());
         assert!(empty_band.is_empty());
+        assert!(empty_current_line.is_empty());
+        assert!(empty_current_band.is_empty());
 
         let one_center = bar_centers(&[1.0]);
         let one_line = mean_line_points(
             WeightedAverageMode::History,
             &one_center,
+            &[1.0],
             StatsPoint {
                 mean: 42.0,
                 std: 3.0,
@@ -506,6 +544,27 @@ mod tests {
             }],
             true,
         );
+        let one_current_line = mean_line_points(
+            WeightedAverageMode::Current,
+            &one_center,
+            &[1.0],
+            StatsPoint {
+                mean: 42.0,
+                std: 3.0,
+            },
+            &[],
+        );
+        let one_current_band = standard_deviation_band_polygons(
+            WeightedAverageMode::Current,
+            &one_center,
+            &[1.0],
+            StatsPoint {
+                mean: 42.0,
+                std: 3.0,
+            },
+            &[],
+            true,
+        );
 
         assert_eq!(one_line, vec![[0.5, 42.0]]);
         assert_eq!(one_band.len(), 1);
@@ -514,6 +573,8 @@ mod tests {
             vec![[0.0, 39.0], [1.0, 39.0], [1.0, 45.0], [0.0, 45.0]]
         );
         assert!(one_band[0].iter().flatten().all(|value| value.is_finite()));
+        assert_eq!(one_current_line, vec![[0.0, 42.0], [1.0, 42.0]]);
+        assert_eq!(one_current_band, one_band);
     }
 
     #[test]
