@@ -1,10 +1,42 @@
 use crate::constants::BAR_BASE_COLOR;
 use crate::domain::ScoreEntry;
-use crate::logic::{PlotParams, calculate_plot_params, calculate_stats};
+use crate::logic::{
+    PlotParams, StatsPoint, calculate_plot_params, calculate_stats, calculate_stats_series,
+};
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
-use egui_plot::{Bar, BarChart, Corner, Legend, Plot, PlotUi};
+use egui_plot::{Bar, BarChart, Corner, Legend, Plot, PlotUi, Polygon};
 use std::iter::zip;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum WeightedAverageMode {
+    Hidden,
+    Current,
+    History,
+}
+
+impl WeightedAverageMode {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Hidden => "非表示",
+            Self::Current => "現在値",
+            Self::History => "推移",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ChartSettings {
+    pub(crate) average_mode: WeightedAverageMode,
+    pub(crate) show_std_band: bool,
+}
+
+struct PlotOverlays<'a> {
+    mean_points: &'a [[f64; 2]],
+    band_polygons: &'a [Vec<[f64; 2]>],
+    min_y: f64,
+    max_y: f64,
+}
 
 pub struct WeightedScoreChart;
 
@@ -18,19 +50,41 @@ impl WeightedScoreChart {
         ui: &mut egui::Ui,
         scores: &[ScoreEntry],
         decay_rate: f64,
-        show_average_line: bool,
+        settings: ChartSettings,
         selected_index: &mut Option<usize>,
         scroll_req_index: &mut Option<usize>,
     ) {
         // 統計計算
-        let (avg, _, _, weights) = calculate_stats(scores, decay_rate);
+        let (avg, std, _, weights) = calculate_stats(scores, decay_rate);
+        let current_stats = StatsPoint { mean: avg, std };
+        let history_stats = if settings.average_mode == WeightedAverageMode::History {
+            calculate_stats_series(scores, decay_rate)
+        } else {
+            Vec::new()
+        };
         let params = calculate_plot_params(scores, &weights);
 
         // バーとクリック判定境界の作成
-        let (bars, boundaries) = self.create_bars(scores, &weights, *selected_index);
+        let (bars, boundaries, centers) = self.create_bars(scores, &weights, *selected_index);
+        let mean_points = mean_line_points(
+            settings.average_mode,
+            &centers,
+            &weights,
+            current_stats,
+            &history_stats,
+        );
+        let band_polygons = standard_deviation_band_polygons(
+            settings.average_mode,
+            &centers,
+            &weights,
+            current_stats,
+            &history_stats,
+            settings.show_std_band,
+        );
+        let overlays = plot_overlays(&params, &mean_points, &band_polygons);
 
         // プロット、クリック処理
-        let clicked_idx = self.draw_plot(ui, bars, &boundaries, avg, &params, show_average_line);
+        let clicked_idx = self.draw_plot(ui, bars, &boundaries, overlays);
 
         // クリック結果
         if let Some(idx) = clicked_idx {
@@ -44,9 +98,10 @@ impl WeightedScoreChart {
         scores: &[ScoreEntry],
         weights: &[f64],
         selected_index: Option<usize>,
-    ) -> (Vec<Bar>, Vec<f64>) {
+    ) -> (Vec<Bar>, Vec<f64>, Vec<f64>) {
         let mut boundaries = Vec::new(); // クリック判定用のバー範囲記録
         let mut current_x = 0.0; // 棒グラフの合計横幅記録用
+        let centers = bar_centers(weights);
 
         let base_color = BAR_BASE_COLOR; // バーカラー
 
@@ -57,7 +112,7 @@ impl WeightedScoreChart {
                 let width = weight; // 重みがそのまま横幅
                 let height = entry.score as f64;
 
-                let center_x = current_x + (width / 2.0);
+                let center_x = centers[i];
 
                 let is_selected = selected_index == Some(i);
                 let bar_color = if is_selected {
@@ -70,7 +125,7 @@ impl WeightedScoreChart {
                     .width(width)
                     .name(format!("{}回目", i + 1))
                     .fill(bar_color)
-                    .stroke(egui::Stroke::new(1.0, base_color));
+                    .stroke(egui::Stroke::new(1.0_f32, base_color));
 
                 boundaries.push(current_x + weight);
                 current_x += width;
@@ -79,7 +134,7 @@ impl WeightedScoreChart {
             })
             .collect::<Vec<Bar>>();
 
-        (bars, boundaries)
+        (bars, boundaries, centers)
     }
 
     fn draw_plot(
@@ -87,9 +142,7 @@ impl WeightedScoreChart {
         ui: &mut egui::Ui,
         bars: Vec<Bar>,
         boundaries: &[f64],
-        avg: f64,
-        params: &PlotParams,
-        show_average_line: bool,
+        overlays: PlotOverlays<'_>,
     ) -> Option<usize> {
         let plot_height = ui.available_height() * 0.6; // 画面の縦幅6割を使用
         let plot = Plot::new("score_plot")
@@ -101,15 +154,14 @@ impl WeightedScoreChart {
             .allow_zoom(false)
             .allow_scroll(false)
             .auto_bounds(egui::Vec2b::new(true, false)) // y軸の自動調整OFF
-            .include_y(params.max_y) // 最小値と最大値を設定
-            .include_y(params.min_y);
+            .include_y(overlays.max_y) // 最小値と最大値を設定
+            .include_y(overlays.min_y);
 
         let total_width = bars.iter().map(|bar| bar.bar_width).sum();
         plot.show(ui, |plot_ui| {
+            self.show_standard_deviation_band(plot_ui, overlays.band_polygons);
             self.show_bars(plot_ui, bars);
-            if show_average_line {
-                self.show_average_line(plot_ui, avg, total_width);
-            }
+            self.show_average_line(plot_ui, overlays.mean_points);
             self.check_click(plot_ui, boundaries, total_width)
         })
         .inner
@@ -127,11 +179,31 @@ impl WeightedScoreChart {
         );
     }
 
+    /// 加重標準偏差帯描画
+    fn show_standard_deviation_band(&self, plot_ui: &mut PlotUi, band_polygons: &[Vec<[f64; 2]>]) {
+        let band_color = egui::Color32::ORANGE.linear_multiply(0.2);
+
+        for (index, points) in band_polygons.iter().enumerate() {
+            let name = if index == 0 { "加重標準偏差" } else { "" };
+            plot_ui.polygon(
+                Polygon::new(name, points.clone())
+                    .id(egui::Id::new(("weighted_std_band", index)))
+                    .fill_color(band_color)
+                    .stroke(egui::Stroke::new(1.0, band_color))
+                    .highlight(false)
+                    .allow_hover(false),
+            );
+        }
+    }
+
     /// 平均線描画
-    fn show_average_line(&self, plot_ui: &mut PlotUi, avg: f64, width: f64) {
-        let line_points = vec![[0.0, avg], [width, avg]];
+    fn show_average_line(&self, plot_ui: &mut PlotUi, mean_points: &[[f64; 2]]) {
+        if mean_points.is_empty() {
+            return;
+        }
+
         plot_ui.line(
-            egui_plot::Line::new("荷重平均", egui_plot::PlotPoints::new(line_points))
+            egui_plot::Line::new("加重平均", egui_plot::PlotPoints::new(mean_points.to_vec()))
                 .color(egui::Color32::ORANGE)
                 .style(egui_plot::LineStyle::Dashed { length: 10.0 })
                 .highlight(false)
@@ -155,6 +227,138 @@ impl WeightedScoreChart {
     }
 }
 
+/// 重みを既存バーの中心座標へ変換する。
+fn bar_centers(weights: &[f64]) -> Vec<f64> {
+    let mut current_x = 0.0;
+
+    weights
+        .iter()
+        .map(|&width| {
+            let center_x = current_x + (width / 2.0);
+            current_x += width;
+            center_x
+        })
+        .collect()
+}
+
+fn mean_line_points(
+    mode: WeightedAverageMode,
+    centers: &[f64],
+    widths: &[f64],
+    current_stats: StatsPoint,
+    history_stats: &[StatsPoint],
+) -> Vec<[f64; 2]> {
+    match mode {
+        WeightedAverageMode::Hidden => Vec::new(),
+        WeightedAverageMode::Current => {
+            if widths.is_empty() {
+                Vec::new()
+            } else {
+                let total_width = widths.iter().sum();
+                vec![[0.0, current_stats.mean], [total_width, current_stats.mean]]
+            }
+        }
+        WeightedAverageMode::History => centers
+            .iter()
+            .zip(history_stats)
+            .map(|(&center, stats)| [center, stats.mean])
+            .collect(),
+    }
+}
+
+fn standard_deviation_band_polygons(
+    mode: WeightedAverageMode,
+    centers: &[f64],
+    widths: &[f64],
+    current_stats: StatsPoint,
+    history_stats: &[StatsPoint],
+    show_band: bool,
+) -> Vec<Vec<[f64; 2]>> {
+    if !show_band {
+        return Vec::new();
+    }
+
+    match mode {
+        WeightedAverageMode::Hidden => Vec::new(),
+        WeightedAverageMode::Current => current_band_polygons(widths, current_stats),
+        WeightedAverageMode::History => history_band_polygons(centers, widths, history_stats),
+    }
+}
+
+fn current_band_polygons(widths: &[f64], stats: StatsPoint) -> Vec<Vec<[f64; 2]>> {
+    if widths.is_empty() {
+        return Vec::new();
+    }
+
+    let total_width = widths.iter().sum();
+    let polygon = band_between_points(0.0, stats, total_width, stats);
+
+    vec![polygon]
+}
+
+fn history_band_polygons(
+    centers: &[f64],
+    widths: &[f64],
+    stats_series: &[StatsPoint],
+) -> Vec<Vec<[f64; 2]>> {
+    let points = centers
+        .iter()
+        .copied()
+        .zip(stats_series.iter().copied())
+        .collect::<Vec<_>>();
+
+    match points.as_slice() {
+        [] => Vec::new(),
+        [(center, stats)] => {
+            vec![band_around_point(
+                *center,
+                widths.first().copied().unwrap_or(0.0),
+                *stats,
+            )]
+        }
+        _ => points
+            .windows(2)
+            .map(|pair| {
+                let (left_center, left_stats) = pair[0];
+                let (right_center, right_stats) = pair[1];
+                band_between_points(left_center, left_stats, right_center, right_stats)
+            })
+            .collect(),
+    }
+}
+
+fn band_around_point(center: f64, width: f64, stats: StatsPoint) -> Vec<[f64; 2]> {
+    let half_width = width / 2.0;
+    band_between_points(center - half_width, stats, center + half_width, stats)
+}
+
+fn band_between_points(
+    left_x: f64,
+    left_stats: StatsPoint,
+    right_x: f64,
+    right_stats: StatsPoint,
+) -> Vec<[f64; 2]> {
+    vec![
+        [left_x, left_stats.mean - left_stats.std],
+        [right_x, right_stats.mean - right_stats.std],
+        [right_x, right_stats.mean + right_stats.std],
+        [left_x, left_stats.mean + left_stats.std],
+    ]
+}
+
+fn plot_overlays<'a>(
+    params: &PlotParams,
+    mean_points: &'a [[f64; 2]],
+    band_polygons: &'a [Vec<[f64; 2]>],
+) -> PlotOverlays<'a> {
+    PlotOverlays {
+        mean_points,
+        band_polygons,
+        min_y: params.min_y,
+        max_y: params.max_y,
+    }
+}
+
 /// x座標がどのバーに属するか判定
 fn find_clicked_bar(x: f64, boundaries: &[f64]) -> Option<usize> {
     // クリック場所が負の場合は範囲外確定
@@ -163,4 +367,213 @@ fn find_clicked_bar(x: f64, boundaries: &[f64]) -> Option<usize> {
     }
 
     boundaries.iter().position(|&end_x| x < end_x)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bar_centers_follow_cumulative_bar_widths() {
+        let centers = bar_centers(&[0.25, 0.5, 1.0]);
+
+        assert_eq!(centers, vec![0.125, 0.5, 1.25]);
+    }
+
+    #[test]
+    fn current_line_and_band_cover_the_full_bar_width() {
+        let centers = bar_centers(&[0.25, 0.5, 1.0]);
+        let widths = [0.25, 0.5, 1.0];
+        let current_stats = StatsPoint {
+            mean: 50.0,
+            std: 5.0,
+        };
+        let line = mean_line_points(
+            WeightedAverageMode::Current,
+            &centers,
+            &widths,
+            current_stats,
+            &[],
+        );
+        let polygons = standard_deviation_band_polygons(
+            WeightedAverageMode::Current,
+            &centers,
+            &widths,
+            current_stats,
+            &[],
+            true,
+        );
+
+        assert_eq!(line, vec![[0.0, 50.0], [1.75, 50.0]]);
+        assert_eq!(
+            polygons,
+            vec![vec![[0.0, 45.0], [1.75, 45.0], [1.75, 55.0], [0.0, 55.0],]]
+        );
+    }
+
+    #[test]
+    fn history_band_uses_each_point_std() {
+        let polygons = standard_deviation_band_polygons(
+            WeightedAverageMode::History,
+            &[0.5, 1.5, 2.5],
+            &[1.0, 1.0, 1.0],
+            StatsPoint {
+                mean: 0.0,
+                std: 0.0,
+            },
+            &[
+                StatsPoint {
+                    mean: 10.0,
+                    std: 1.0,
+                },
+                StatsPoint {
+                    mean: 20.0,
+                    std: 2.0,
+                },
+                StatsPoint {
+                    mean: 30.0,
+                    std: 3.0,
+                },
+            ],
+            true,
+        );
+
+        assert_eq!(polygons.len(), 2);
+        assert_eq!(
+            polygons[0],
+            vec![[0.5, 9.0], [1.5, 18.0], [1.5, 22.0], [0.5, 11.0],]
+        );
+        assert_eq!(
+            polygons[1],
+            vec![[1.5, 18.0], [2.5, 27.0], [2.5, 33.0], [1.5, 22.0],]
+        );
+    }
+
+    #[test]
+    fn chart_helpers_are_safe_for_empty_and_single_point_inputs() {
+        let empty_centers = bar_centers(&[]);
+        let empty_line = mean_line_points(
+            WeightedAverageMode::History,
+            &empty_centers,
+            &[],
+            StatsPoint {
+                mean: 0.0,
+                std: 0.0,
+            },
+            &[],
+        );
+        let empty_band = standard_deviation_band_polygons(
+            WeightedAverageMode::History,
+            &empty_centers,
+            &[],
+            StatsPoint {
+                mean: 0.0,
+                std: 0.0,
+            },
+            &[],
+            true,
+        );
+        let empty_current_line = mean_line_points(
+            WeightedAverageMode::Current,
+            &empty_centers,
+            &[],
+            StatsPoint {
+                mean: 0.0,
+                std: 0.0,
+            },
+            &[],
+        );
+        let empty_current_band = standard_deviation_band_polygons(
+            WeightedAverageMode::Current,
+            &empty_centers,
+            &[],
+            StatsPoint {
+                mean: 0.0,
+                std: 0.0,
+            },
+            &[],
+            true,
+        );
+
+        assert!(empty_line.is_empty());
+        assert!(empty_band.is_empty());
+        assert!(empty_current_line.is_empty());
+        assert!(empty_current_band.is_empty());
+
+        let one_center = bar_centers(&[1.0]);
+        let one_line = mean_line_points(
+            WeightedAverageMode::History,
+            &one_center,
+            &[1.0],
+            StatsPoint {
+                mean: 42.0,
+                std: 3.0,
+            },
+            &[StatsPoint {
+                mean: 42.0,
+                std: 3.0,
+            }],
+        );
+        let one_band = standard_deviation_band_polygons(
+            WeightedAverageMode::History,
+            &one_center,
+            &[1.0],
+            StatsPoint {
+                mean: 42.0,
+                std: 3.0,
+            },
+            &[StatsPoint {
+                mean: 42.0,
+                std: 3.0,
+            }],
+            true,
+        );
+        let one_current_line = mean_line_points(
+            WeightedAverageMode::Current,
+            &one_center,
+            &[1.0],
+            StatsPoint {
+                mean: 42.0,
+                std: 3.0,
+            },
+            &[],
+        );
+        let one_current_band = standard_deviation_band_polygons(
+            WeightedAverageMode::Current,
+            &one_center,
+            &[1.0],
+            StatsPoint {
+                mean: 42.0,
+                std: 3.0,
+            },
+            &[],
+            true,
+        );
+
+        assert_eq!(one_line, vec![[0.5, 42.0]]);
+        assert_eq!(one_band.len(), 1);
+        assert_eq!(
+            one_band[0],
+            vec![[0.0, 39.0], [1.0, 39.0], [1.0, 45.0], [0.0, 45.0]]
+        );
+        assert!(one_band[0].iter().flatten().all(|value| value.is_finite()));
+        assert_eq!(one_current_line, vec![[0.0, 42.0], [1.0, 42.0]]);
+        assert_eq!(one_current_band, one_band);
+    }
+
+    #[test]
+    fn plot_overlays_keep_score_bounds_when_displayed_values_are_outside() {
+        let params = PlotParams {
+            min_y: 0.0,
+            max_y: 10.0,
+        };
+        let mean_points = vec![[0.5, 12.0]];
+        let band_polygons = vec![vec![[0.0, -2.0], [1.0, -2.0], [1.0, 20.0], [0.0, 20.0]]];
+        let overlays = plot_overlays(&params, &mean_points, &band_polygons);
+
+        assert_eq!(
+            (overlays.min_y, overlays.max_y),
+            (params.min_y, params.max_y)
+        );
+    }
 }

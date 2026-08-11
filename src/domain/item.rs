@@ -27,9 +27,18 @@ pub struct ItemData {
     pub scores: Vec<ScoreEntry>,
     pub decay_rate: f64,
 
+    /// 一覧でタイトルの下に表示する任意の補足情報。
+    #[serde(default)]
+    pub subtitle: String,
+
+    /// アプリケーション共有タグへの参照。タグ実体は AppData が保持する。
+    #[serde(default)]
+    pub tag_ids: Vec<super::TagId>,
+
     // 古いJSONファイルの "created_at" も読み込む
     #[serde(alias = "created_at", default = "default_created_at")]
     // 未設定の場合、現在時刻で埋める
+    // 「最近更新」の順序はスコア追加だけで動かし、設定編集やスコア削除では維持する。
     pub updated_at: DateTime<Utc>,
 }
 
@@ -61,7 +70,6 @@ impl ItemData {
         }
 
         self.scores.remove(index);
-        self.updated_at = Utc::now();
 
         Ok(())
     }
@@ -71,6 +79,11 @@ impl ItemData {
 
         self.decay_rate = new_rate;
         Ok(())
+    }
+
+    pub fn update_metadata(&mut self, subtitle: String, tag_ids: Vec<super::TagId>) {
+        self.subtitle = subtitle;
+        self.tag_ids = tag_ids;
     }
 }
 
@@ -83,6 +96,8 @@ mod tests {
         ItemData {
             scores: Vec::new(),
             decay_rate: 0.9,
+            subtitle: String::new(),
+            tag_ids: Vec::new(),
             updated_at: Utc::now(),
         }
     }
@@ -128,5 +143,23 @@ mod tests {
         let mut item = sample_item();
         item.update_decay_rate(0.5).unwrap();
         assert_eq!(item.decay_rate, 0.5);
+    }
+
+    #[test]
+    fn only_adding_score_updates_recency_timestamp() {
+        let mut item = sample_item();
+        item.updated_at = Utc::now() - chrono::Duration::seconds(1);
+        let initial = item.updated_at;
+
+        item.update_decay_rate(0.5).unwrap();
+        item.update_metadata("memo".to_string(), vec![1]);
+        assert_eq!(item.updated_at, initial);
+
+        item.add_score(42).unwrap();
+        assert!(item.updated_at > initial);
+        let after_add = item.updated_at;
+
+        item.remove_score(0).unwrap();
+        assert_eq!(item.updated_at, after_add);
     }
 }

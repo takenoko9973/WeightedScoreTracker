@@ -1,4 +1,4 @@
-use crate::domain::TrackerModel;
+use crate::domain::{MoveDirection, TagId, TrackerModel};
 
 use super::{AppError, DataStore};
 
@@ -9,7 +9,8 @@ pub struct TrackerService<S: DataStore> {
 
 impl<S: DataStore> TrackerService<S> {
     pub fn new(store: S) -> Result<Self, AppError> {
-        let data = store.load()?.unwrap_or_default();
+        let mut data = store.load()?.unwrap_or_default();
+        data.normalize();
         Ok(Self {
             model: TrackerModel::new(data),
             store,
@@ -45,10 +46,13 @@ impl<S: DataStore> TrackerService<S> {
         &mut self,
         category: &str,
         item_name: String,
+        subtitle: String,
         decay_input: &str,
+        tag_ids: Vec<TagId>,
     ) -> Result<(), AppError> {
         let decay_rate = parse_f64(decay_input, "有効な数値を入力してください。")?;
-        self.model.add_item(category, item_name, decay_rate)?;
+        self.model
+            .add_item(category, item_name, subtitle, decay_rate, tag_ids)?;
         self.persist()
     }
 
@@ -66,10 +70,13 @@ impl<S: DataStore> TrackerService<S> {
         &mut self,
         old_loc: (&str, &str),
         new_loc: (&str, &str),
+        subtitle: String,
         decay_input: &str,
+        tag_ids: Vec<TagId>,
     ) -> Result<(), AppError> {
         let decay = parse_f64(decay_input, "有効な数値を入力してください。")?;
-        self.model.update_item(old_loc, new_loc, decay)?;
+        self.model
+            .update_item(old_loc, new_loc, subtitle, decay, tag_ids)?;
         self.persist()
     }
 
@@ -89,6 +96,37 @@ impl<S: DataStore> TrackerService<S> {
             .ok_or_else(|| AppError::Domain("項目が選択されていません。".into()))?;
 
         self.model.remove_score(&cat, &item, index)?;
+        self.persist()
+    }
+
+    pub fn create_tag(&mut self, name: String, color: [u8; 3]) -> Result<TagId, AppError> {
+        let id = self.model.create_tag(name, color)?;
+        self.persist()?;
+        Ok(id)
+    }
+
+    pub fn update_tag(&mut self, id: TagId, name: String, color: [u8; 3]) -> Result<(), AppError> {
+        self.model.update_tag(id, name, color)?;
+        self.persist()
+    }
+
+    pub fn delete_tag(&mut self, id: TagId) -> Result<(), AppError> {
+        self.model.delete_tag(id)?;
+        self.persist()
+    }
+
+    pub fn move_category(&mut self, name: &str, direction: MoveDirection) -> Result<(), AppError> {
+        self.model.move_category(name, direction)?;
+        self.persist()
+    }
+
+    pub fn move_item_in_order(
+        &mut self,
+        category: &str,
+        item: &str,
+        direction: MoveDirection,
+    ) -> Result<(), AppError> {
+        self.model.move_item_in_order(category, item, direction)?;
         self.persist()
     }
 
@@ -160,7 +198,8 @@ mod tests {
     fn seeded_data() -> AppData {
         let mut data = AppData::default();
         data.add_category("Cat".to_string()).unwrap();
-        data.add_item("Cat", "Item".to_string(), 0.9).unwrap();
+        data.add_item("Cat", "Item".to_string(), String::new(), 0.9, vec![])
+            .unwrap();
         data
     }
 
@@ -181,7 +220,13 @@ mod tests {
         let mut service = TrackerService::new(store).unwrap();
 
         let err = service
-            .add_item("Cat", "New".to_string(), "not-a-number")
+            .add_item(
+                "Cat",
+                "New".to_string(),
+                String::new(),
+                "not-a-number",
+                vec![],
+            )
             .unwrap_err();
         assert!(matches!(err, AppError::Input(_)));
     }

@@ -10,7 +10,7 @@ mod item;
 mod model;
 mod selection;
 
-pub use app_data::AppData;
+pub use app_data::{AppData, MoveDirection, TagData, TagId};
 pub use category::CategoryData;
 pub use error::DomainError;
 pub use item::{ItemData, ScoreEntry};

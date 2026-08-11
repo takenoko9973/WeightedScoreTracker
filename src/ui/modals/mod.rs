@@ -4,11 +4,24 @@ pub mod confirm;
 pub mod edit_category;
 pub mod edit_item;
 pub mod error;
+pub mod tag_manager;
 
 use crate::action::Action;
+use crate::domain::TagData;
 use crate::ui::modals::error::ErrorModal;
 use crate::ui::state::UiState;
 use eframe::egui;
+
+fn tag_chip(ui: &mut egui::Ui, tag: &TagData, selected: bool) -> egui::Response {
+    let color = egui::Color32::from_rgb(tag.color[0], tag.color[1], tag.color[2]);
+    ui.add(
+        egui::Button::new((egui::RichText::new("●").color(color), tag.name.as_str()))
+            .selected(selected)
+            .corner_radius(ui.spacing().interact_size.y / 2.0)
+            .truncate(),
+    )
+    .on_hover_text(&tag.name)
+}
 
 /// モーダル管理
 pub struct ModalLayer {
