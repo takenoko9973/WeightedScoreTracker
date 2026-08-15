@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{DomainError, default_created_at};
+use super::DomainError;
 use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
 
 // バリデーションヘルパー関数
@@ -36,7 +36,7 @@ pub struct ItemData {
     pub tag_ids: Vec<super::TagId>,
 
     // 古いJSONファイルの "created_at" も読み込む
-    #[serde(alias = "created_at", default = "default_created_at")]
+    #[serde(alias = "created_at", default = "Utc::now")]
     // 未設定の場合、現在時刻で埋める
     // 「最近更新」の順序はスコア追加だけで動かし、設定編集やスコア削除では維持する。
     pub updated_at: DateTime<Utc>,
@@ -76,7 +76,6 @@ impl ItemData {
 
     pub fn update_decay_rate(&mut self, new_rate: f64) -> Result<(), DomainError> {
         validate_decay_rate_range(new_rate)?;
-
         self.decay_rate = new_rate;
         Ok(())
     }

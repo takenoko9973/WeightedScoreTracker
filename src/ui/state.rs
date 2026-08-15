@@ -7,7 +7,6 @@ pub enum ItemSort {
     #[default]
     Recent,
     Name,
-    Manual,
 }
 
 #[derive(Default)]

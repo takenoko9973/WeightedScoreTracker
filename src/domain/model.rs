@@ -1,8 +1,9 @@
 use crate::domain::error::DomainError;
 
-use super::{AppData, ItemData, MoveDirection, SelectionState, TagData, TagId};
+use super::{AppData, ItemData, SelectionState, TagData, TagId};
 
 /// アプリケーションのドメインロジックと状態を一元管理するモデル
+#[derive(Clone)]
 pub struct TrackerModel {
     pub data: AppData,
     pub selection: SelectionState,
@@ -147,23 +148,6 @@ impl TrackerModel {
 
     pub fn tags(&self) -> &std::collections::HashMap<TagId, TagData> {
         &self.data.tags
-    }
-
-    pub fn move_category(
-        &mut self,
-        name: &str,
-        direction: MoveDirection,
-    ) -> Result<(), DomainError> {
-        self.data.move_category(name, direction)
-    }
-
-    pub fn move_item_in_order(
-        &mut self,
-        category: &str,
-        item: &str,
-        direction: MoveDirection,
-    ) -> Result<(), DomainError> {
-        self.data.move_item_in_order(category, item, direction)
     }
 
     // 選択操作

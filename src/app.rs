@@ -133,10 +133,6 @@ impl WeightedScoreTracker {
             Action::CreateTag(name, color) => self.create_tag(name, color),
             Action::UpdateTag(id, name, color) => self.update_tag(id, name, color),
             Action::DeleteTag(id) => self.delete_tag(id),
-            Action::MoveCategory(name, direction) => self.move_category(&name, direction),
-            Action::MoveItem(category, item, direction) => {
-                self.move_item_in_order(&category, &item, direction)
-            }
         };
     }
 
@@ -234,23 +230,6 @@ impl WeightedScoreTracker {
     fn open_tag_manager(&mut self) {
         let tags = self.service.model().tags().values().cloned().collect();
         self.modal_layer.open(TagManagerModal::new(tags));
-    }
-
-    fn move_category(&mut self, name: &str, direction: crate::domain::MoveDirection) {
-        if let Err(err) = self.service.move_category(name, direction) {
-            self.state.error_message = Some(err.to_string());
-        }
-    }
-
-    fn move_item_in_order(
-        &mut self,
-        category: &str,
-        item: &str,
-        direction: crate::domain::MoveDirection,
-    ) {
-        if let Err(err) = self.service.move_item_in_order(category, item, direction) {
-            self.state.error_message = Some(err.to_string());
-        }
     }
 
     /// カテゴリ削除実行

@@ -1,7 +1,5 @@
 use crate::action::Action;
-use crate::domain::{
-    AppData, CategoryData, ItemData, MoveDirection, SelectionState, TagData, TagId,
-};
+use crate::domain::{AppData, CategoryData, ItemData, SelectionState, TagData, TagId};
 use crate::ui::state::{ItemSort, UiState};
 use eframe::egui::{self, Align, Layout, Sense, UiBuilder, UiKind};
 use std::collections::{HashMap, HashSet};
@@ -48,17 +46,13 @@ fn matches_selected_tags(item: &ItemData, selected_tag_ids: &HashSet<TagId>) -> 
 
 fn visible_item_names<'a>(
     cat_data: &'a CategoryData,
-    manual_item_names: &[&'a str],
     category_matches: bool,
     query: &str,
     selected_tag_ids: &HashSet<TagId>,
     tags: &HashMap<TagId, TagData>,
     sort: ItemSort,
 ) -> Vec<&'a str> {
-    let mut names: Vec<_> = match sort {
-        ItemSort::Manual => manual_item_names.to_vec(),
-        ItemSort::Recent | ItemSort::Name => cat_data.items.keys().map(String::as_str).collect(),
-    };
+    let mut names: Vec<_> = cat_data.items.keys().map(String::as_str).collect();
 
     names.retain(|name| {
         let Some(item) = cat_data.items.get(*name) else {
@@ -72,17 +66,17 @@ fn visible_item_names<'a>(
         ItemSort::Recent => names.sort_by(|a, b| {
             let item_a = &cat_data.items[*a];
             let item_b = &cat_data.items[*b];
-            item_b
-                .updated_at
-                .cmp(&item_a.updated_at)
-                .then_with(|| a.to_lowercase().cmp(&b.to_lowercase()))
+            item_b.updated_at.cmp(&item_a.updated_at).then_with(|| {
+                a.to_lowercase()
+                    .cmp(&b.to_lowercase())
+                    .then_with(|| a.cmp(b))
+            })
         }),
         ItemSort::Name => names.sort_by(|a, b| {
             a.to_lowercase()
                 .cmp(&b.to_lowercase())
                 .then_with(|| a.cmp(b))
         }),
-        ItemSort::Manual => {}
     }
 
     names
@@ -92,12 +86,8 @@ fn category_matches_query(name: &str, query: &str) -> bool {
     !query.is_empty() && contains_case_insensitive(name, query)
 }
 
-fn should_force_category_open(
-    has_filter: bool,
-    visible_item_count: usize,
-    is_selected_category: bool,
-) -> bool {
-    (has_filter && visible_item_count > 0) || is_selected_category
+fn should_force_category_open(has_filter: bool, visible_item_count: usize) -> bool {
+    has_filter && visible_item_count > 0
 }
 
 fn category_menu_action(
@@ -105,8 +95,6 @@ fn category_menu_action(
     add_item_clicked: bool,
     edit_clicked: bool,
     delete_clicked: bool,
-    move_up_clicked: bool,
-    move_down_clicked: bool,
 ) -> Option<Action> {
     if add_item_clicked {
         Some(Action::ShowAddItemModal(cat_name.to_string()))
@@ -114,16 +102,6 @@ fn category_menu_action(
         Some(Action::ShowEditCategoryModal(cat_name.to_string()))
     } else if delete_clicked {
         Some(Action::ShowDeleteCategoryConfirm(cat_name.to_string()))
-    } else if move_up_clicked {
-        Some(Action::MoveCategory(
-            cat_name.to_string(),
-            MoveDirection::Up,
-        ))
-    } else if move_down_clicked {
-        Some(Action::MoveCategory(
-            cat_name.to_string(),
-            MoveDirection::Down,
-        ))
     } else {
         None
     }
@@ -134,8 +112,6 @@ fn item_menu_action(
     item_name: &str,
     edit_clicked: bool,
     delete_clicked: bool,
-    move_up_clicked: bool,
-    move_down_clicked: bool,
 ) -> Option<Action> {
     if edit_clicked {
         Some(Action::ShowEditItemModal(
@@ -146,18 +122,6 @@ fn item_menu_action(
         Some(Action::ShowDeleteItemConfirm(
             cat_name.to_string(),
             item_name.to_string(),
-        ))
-    } else if move_up_clicked {
-        Some(Action::MoveItem(
-            cat_name.to_string(),
-            item_name.to_string(),
-            MoveDirection::Up,
-        ))
-    } else if move_down_clicked {
-        Some(Action::MoveItem(
-            cat_name.to_string(),
-            item_name.to_string(),
-            MoveDirection::Down,
         ))
     } else {
         None
@@ -181,13 +145,9 @@ pub fn show(
                 let Some(cat_data) = data.categories.get(cat_name) else {
                     continue;
                 };
-                let manual_item_names = data
-                    .ordered_item_names(cat_name)
-                    .expect("カテゴリ一覧の項目順はカテゴリ本体と一致している");
                 let category_matches = category_matches_query(cat_name, &query);
                 let item_names = visible_item_names(
                     cat_data,
-                    &manual_item_names,
                     category_matches,
                     &query,
                     &state.selected_tag_ids,
@@ -206,13 +166,7 @@ pub fn show(
                     &item_names,
                     &data.tags,
                     selection,
-                    !has_filter,
-                    state.item_sort == ItemSort::Manual && !has_filter,
-                    should_force_category_open(
-                        has_filter,
-                        item_names.len(),
-                        selection.category.as_deref() == Some(cat_name),
-                    ),
+                    should_force_category_open(has_filter, item_names.len()),
                 ) {
                     action = Some(next_action);
                 }
@@ -230,8 +184,6 @@ fn draw_single_category(
     item_names: &[&str],
     tags: &HashMap<TagId, TagData>,
     selection: &SelectionState,
-    category_move_enabled: bool,
-    item_move_enabled: bool,
     force_open: bool,
 ) -> Option<Action> {
     let mut action = None;
@@ -249,16 +201,7 @@ fn draw_single_category(
                     let add = ui.button("＋ 項目を追加").clicked();
                     let edit = ui.button("✏ 名前を変更").clicked();
                     let delete = ui.button("🗑 カテゴリを削除").clicked();
-                    ui.separator();
-                    let move_up = ui
-                        .add_enabled(category_move_enabled, egui::Button::new("↑ 上へ"))
-                        .clicked();
-                    let move_down = ui
-                        .add_enabled(category_move_enabled, egui::Button::new("↓ 下へ"))
-                        .clicked();
-                    if let Some(next_action) =
-                        category_menu_action(cat_name, add, edit, delete, move_up, move_down)
-                    {
+                    if let Some(next_action) = category_menu_action(cat_name, add, edit, delete) {
                         action = Some(next_action);
                         ui.close_kind(UiKind::Menu);
                     }
@@ -289,15 +232,9 @@ fn draw_single_category(
                 let Some(item) = cat_data.items.get(*item_name) else {
                     continue;
                 };
-                if let Some(next_action) = draw_single_item(
-                    ui,
-                    cat_name,
-                    item_name,
-                    item,
-                    tags,
-                    selection,
-                    item_move_enabled,
-                ) {
+                if let Some(next_action) =
+                    draw_single_item(ui, cat_name, item_name, item, tags, selection)
+                {
                     action = Some(next_action);
                 }
             }
@@ -307,16 +244,7 @@ fn draw_single_category(
         let add = ui.button("＋ 項目を追加").clicked();
         let edit = ui.button("✏ 名前を変更").clicked();
         let delete = ui.button("🗑 カテゴリを削除").clicked();
-        ui.separator();
-        let move_up = ui
-            .add_enabled(category_move_enabled, egui::Button::new("↑ 上へ"))
-            .clicked();
-        let move_down = ui
-            .add_enabled(category_move_enabled, egui::Button::new("↓ 下へ"))
-            .clicked();
-        if let Some(next_action) =
-            category_menu_action(cat_name, add, edit, delete, move_up, move_down)
-        {
+        if let Some(next_action) = category_menu_action(cat_name, add, edit, delete) {
             action = Some(next_action);
             ui.close_kind(UiKind::Menu);
         }
@@ -332,7 +260,6 @@ fn draw_single_item(
     item: &ItemData,
     tags: &HashMap<TagId, TagData>,
     selection: &SelectionState,
-    item_move_enabled: bool,
 ) -> Option<Action> {
     let is_selected = selection.category.as_deref() == Some(cat_name)
         && selection.item.as_deref() == Some(item_name);
@@ -406,15 +333,7 @@ fn draw_single_item(
         let edit = ui.button("✏ 項目を編集...").clicked();
         let delete = ui.button("🗑 項目を削除").clicked();
         ui.separator();
-        let move_up = ui
-            .add_enabled(item_move_enabled, egui::Button::new("↑ 上へ"))
-            .clicked();
-        let move_down = ui
-            .add_enabled(item_move_enabled, egui::Button::new("↓ 下へ"))
-            .clicked();
-        if let Some(next_action) =
-            item_menu_action(cat_name, item_name, edit, delete, move_up, move_down)
-        {
+        if let Some(next_action) = item_menu_action(cat_name, item_name, edit, delete) {
             ui.close_kind(UiKind::Menu);
             action = Some(next_action);
         }
@@ -634,11 +553,8 @@ mod tests {
 
     #[test]
     fn category_match_returns_all_items_that_pass_tag_filter() {
-        let category = CategoryData {
-            items: HashMap::from([item("A", "", vec![1]), item("B", "", vec![2])]),
-            item_order: vec!["A".to_string(), "B".to_string()],
-            created_at: Utc::now(),
-        };
+        let mut category = CategoryData::new();
+        category.items = HashMap::from([item("A", "", vec![1]), item("B", "", vec![2])]);
         let tags = HashMap::from([
             (
                 1,
@@ -659,32 +575,31 @@ mod tests {
         ]);
         let names = visible_item_names(
             &category,
-            &["A", "B"],
             true,
             "category",
             &HashSet::from([2]),
             &tags,
-            ItemSort::Manual,
+            ItemSort::Recent,
         );
         assert_eq!(names, vec!["B"]);
     }
 
     #[test]
-    fn action_mapping_preserves_item_location_and_move_direction() {
+    fn action_mapping_preserves_edit_and_delete_targets() {
         assert!(matches!(
-            item_menu_action("Cat", "Item", false, false, true, false),
-            Some(Action::MoveItem(cat, item, MoveDirection::Up)) if cat == "Cat" && item == "Item"
+            item_menu_action("Cat", "Item", true, false),
+            Some(Action::ShowEditItemModal(cat, item)) if cat == "Cat" && item == "Item"
         ));
         assert!(matches!(
-            category_menu_action("Cat", false, false, false, false, true),
-            Some(Action::MoveCategory(name, MoveDirection::Down)) if name == "Cat"
+            category_menu_action("Cat", false, false, true),
+            Some(Action::ShowDeleteCategoryConfirm(name)) if name == "Cat"
         ));
     }
 
     #[test]
-    fn filtered_matches_and_selected_categories_are_forced_open() {
-        assert!(should_force_category_open(true, 1, false));
-        assert!(should_force_category_open(false, 0, true));
-        assert!(!should_force_category_open(true, 0, false));
+    fn only_categories_with_filtered_items_are_forced_open() {
+        assert!(should_force_category_open(true, 1));
+        assert!(!should_force_category_open(false, 1));
+        assert!(!should_force_category_open(true, 0));
     }
 }

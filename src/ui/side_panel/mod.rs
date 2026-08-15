@@ -115,7 +115,6 @@ fn show_header(
             ui.set_min_width(110.0);
             ui.selectable_value(&mut state.item_sort, ItemSort::Recent, "最近更新");
             ui.selectable_value(&mut state.item_sort, ItemSort::Name, "名前");
-            ui.selectable_value(&mut state.item_sort, ItemSort::Manual, "手動");
         });
 
         let search_width = ui.available_width();
