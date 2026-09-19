@@ -4,8 +4,8 @@ version = "0.6.0"
 edition = "2024"
 
 [dependencies]
-eframe = { version = "0.33", features = ["persistence"] } # GUI本体
-egui_plot = "0.34"                                        # グラフ描画
+eframe = { version = "0.36.2", features = ["persistence"] } # GUI本体
+egui_plot = "0.37.0"                                        # グラフ描画
 serde = { version = "1.0", features = ["derive"] }        # シリアライズ
 serde_json = "1.0"                                        # JSON操作
 chrono = { version = "0.4", features = ["serde"] }        # 日時操作

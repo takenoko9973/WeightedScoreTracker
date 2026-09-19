@@ -55,12 +55,12 @@ impl CentralPanel {
 
     pub fn show(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut egui::Ui,
         model: &TrackerModel,
         enabled: bool,
     ) -> Option<Action> {
         egui::CentralPanel::default()
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 if !enabled {
                     // UIの無効化
                     ui.disable();

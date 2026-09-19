@@ -216,19 +216,19 @@ fn disable_label_selection(ctx: &egui::Context) {
 }
 
 impl eframe::App for WeightedScoreTracker {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // モーダルが開いているかどうか（通常モーダル or エラーメッセージ）
         let is_modal_open = self.modal_layer.is_open() || self.state.error_message.is_some();
         let is_panel_enabled = !is_modal_open; // 開いている場合は無効化
 
         let side_act =
             self.side_panel
-                .show(ctx, self.service.model(), &mut self.state, is_panel_enabled);
+                .show(ui, self.service.model(), &mut self.state, is_panel_enabled);
         let central_act = self
             .central_panel
-            .show(ctx, self.service.model(), is_panel_enabled);
+            .show(ui, self.service.model(), is_panel_enabled);
 
-        let modal_act = self.modal_layer.show(ctx, &mut self.state);
+        let modal_act = self.modal_layer.show(ui.ctx(), &mut self.state);
 
         let action = modal_act.or(side_act).or(central_act);
 
@@ -262,6 +262,10 @@ mod tests {
 
         fn set_string(&mut self, key: &str, value: String) {
             self.values.insert(key.to_owned(), value);
+        }
+
+        fn remove_string(&mut self, key: &str) {
+            self.values.remove(key);
         }
 
         fn flush(&mut self) {}
