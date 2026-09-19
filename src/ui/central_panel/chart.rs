@@ -6,9 +6,10 @@ use crate::logic::{
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
 use egui_plot::{Bar, BarChart, Corner, Legend, Plot, PlotUi, Polygon};
+use serde::{Deserialize, Serialize};
 use std::iter::zip;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub(crate) enum WeightedAverageMode {
     Hidden,
     Current,
@@ -25,10 +26,19 @@ impl WeightedAverageMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub(crate) struct ChartSettings {
     pub(crate) average_mode: WeightedAverageMode,
     pub(crate) show_std_band: bool,
+}
+
+impl Default for ChartSettings {
+    fn default() -> Self {
+        Self {
+            average_mode: WeightedAverageMode::Current,
+            show_std_band: false,
+        }
+    }
 }
 
 struct PlotOverlays<'a> {

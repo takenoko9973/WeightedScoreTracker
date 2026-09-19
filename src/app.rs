@@ -43,7 +43,7 @@ impl WeightedScoreTracker {
             state,
 
             side_panel: SidePanel::new(),
-            central_panel: CentralPanel::new(),
+            central_panel: CentralPanel::new(cc.storage),
             modal_layer: ModalLayer::new(),
         }
     }
@@ -283,11 +283,36 @@ impl eframe::App for WeightedScoreTracker {
             self.handle_action(act);
         }
     }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.central_panel.save(storage);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::central_panel::{
+        CHART_SETTINGS_STORAGE_KEY, ChartSettings, WeightedAverageMode,
+    };
+    use std::collections::HashMap;
+
+    #[derive(Default)]
+    struct TestStorage {
+        values: HashMap<String, String>,
+    }
+
+    impl eframe::Storage for TestStorage {
+        fn get_string(&self, key: &str) -> Option<String> {
+            self.values.get(key).cloned()
+        }
+
+        fn set_string(&mut self, key: &str, value: String) {
+            self.values.insert(key.to_owned(), value);
+        }
+
+        fn flush(&mut self) {}
+    }
 
     #[test]
     fn label_selection_is_disabled_for_both_themes() {
@@ -300,5 +325,44 @@ mod tests {
             assert!(!interaction.selectable_labels);
             assert!(!interaction.multi_widget_text_select);
         }
+    }
+
+    #[test]
+    fn chart_settings_survive_app_save_and_restart() {
+        let expected = ChartSettings {
+            average_mode: WeightedAverageMode::History,
+            show_std_band: true,
+        };
+        let mut storage = TestStorage::default();
+        eframe::set_value(&mut storage, CHART_SETTINGS_STORAGE_KEY, &expected);
+
+        let mut cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        cc.storage = Some(&storage);
+        let mut app = WeightedScoreTracker::new(&cc);
+        drop(cc);
+
+        eframe::set_value(
+            &mut storage,
+            CHART_SETTINGS_STORAGE_KEY,
+            &ChartSettings::default(),
+        );
+        <WeightedScoreTracker as eframe::App>::save(&mut app, &mut storage);
+
+        let saved: ChartSettings = eframe::get_value(&storage, CHART_SETTINGS_STORAGE_KEY)
+            .expect("chart settings should be saved");
+        assert_eq!(saved, expected);
+
+        let mut restart_cc = eframe::CreationContext::_new_kittest(egui::Context::default());
+        restart_cc.storage = Some(&storage);
+        let mut restarted_app = WeightedScoreTracker::new(&restart_cc);
+        drop(restart_cc);
+
+        let mut restored_storage = TestStorage::default();
+        <WeightedScoreTracker as eframe::App>::save(&mut restarted_app, &mut restored_storage);
+
+        let restored: ChartSettings =
+            eframe::get_value(&restored_storage, CHART_SETTINGS_STORAGE_KEY)
+                .expect("chart settings should be restored");
+        assert_eq!(restored, expected);
     }
 }
