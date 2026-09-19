@@ -117,18 +117,6 @@ impl AppData {
         names
     }
 
-    pub fn ordered_item_names(&self, cat_name: &str) -> Result<Vec<&str>, DomainError> {
-        let category = self.get_category(cat_name)?;
-        let mut names: Vec<_> = category.items.keys().map(String::as_str).collect();
-        names.sort_by(|a, b| {
-            category.items[*b]
-                .updated_at
-                .cmp(&category.items[*a].updated_at)
-                .then_with(|| compare_names(a, b))
-        });
-        Ok(names)
-    }
-
     pub fn add_category(&mut self, name: String) -> Result<(), DomainError> {
         let name = name.trim().to_string();
         if name.is_empty() {
@@ -378,34 +366,15 @@ mod tests {
     }
 
     #[test]
-    fn items_and_categories_are_ordered_by_update_time_then_name() {
+    fn categories_are_ordered_by_update_time_then_name() {
         let mut data = AppData::default();
         data.add_category("beta".to_string()).unwrap();
         data.add_category("Alpha".to_string()).unwrap();
-        data.add_item("beta", "b".to_string(), String::new(), 0.9, vec![])
-            .unwrap();
-        data.add_item("beta", "A".to_string(), String::new(), 0.9, vec![])
-            .unwrap();
         let same_time = timestamp("2024-01-01T00:00:00Z");
         data.categories.get_mut("beta").unwrap().updated_at = same_time;
         data.categories.get_mut("Alpha").unwrap().updated_at = same_time;
-        data.categories
-            .get_mut("beta")
-            .unwrap()
-            .items
-            .get_mut("b")
-            .unwrap()
-            .updated_at = same_time;
-        data.categories
-            .get_mut("beta")
-            .unwrap()
-            .items
-            .get_mut("A")
-            .unwrap()
-            .updated_at = same_time;
 
         assert_eq!(data.ordered_category_names(), vec!["Alpha", "beta"]);
-        assert_eq!(data.ordered_item_names("beta").unwrap(), vec!["A", "b"]);
     }
 
     #[test]
