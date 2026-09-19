@@ -1,4 +1,4 @@
-FROM rust:1.97-slim-trixie
+FROM rust:1.98-slim-trixie
 
 # RUN - https://docs.docker.jp/engine/reference/builder.html#run
 # パッケージの更新とインストール
