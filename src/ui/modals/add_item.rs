@@ -1,4 +1,4 @@
-use super::{Modal, ModalResult, tag_chip};
+use super::{Modal, ModalResult, show_tag_chips, sort_tags};
 use crate::action::Action;
 use crate::constants::{DEFAULT_DECAY_RATE, MAX_DECAY_RATE, MIN_DECAY_RATE};
 use crate::domain::{TagData, TagId};
@@ -19,7 +19,7 @@ pub struct AddItemModal {
 
 impl AddItemModal {
     pub fn new(cat_name: String, mut tags: Vec<TagData>) -> Self {
-        tags.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_tags(&mut tags);
         Self {
             target_cat: cat_name,
             input_item: String::new(),
@@ -27,16 +27,6 @@ impl AddItemModal {
             input_decay: DEFAULT_DECAY_RATE.to_string(),
             available_tags: tags,
             selected_tag_ids: Vec::new(),
-        }
-    }
-
-    fn toggle_tag(&mut self, id: TagId, selected: bool) {
-        if selected {
-            if !self.selected_tag_ids.contains(&id) {
-                self.selected_tag_ids.push(id);
-            }
-        } else {
-            self.selected_tag_ids.retain(|tag_id| *tag_id != id);
         }
     }
 }
@@ -81,14 +71,7 @@ impl Modal for AddItemModal {
                 egui::ScrollArea::vertical()
                     .max_height(100.0)
                     .show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            for tag in self.available_tags.clone() {
-                                let selected = self.selected_tag_ids.contains(&tag.id);
-                                if tag_chip(ui, &tag, selected).clicked() {
-                                    self.toggle_tag(tag.id, !selected);
-                                }
-                            }
-                        });
+                        show_tag_chips(ui, &self.available_tags, &mut self.selected_tag_ids);
                     });
 
                 ui.add_space(10.0);
@@ -114,15 +97,16 @@ impl Modal for AddItemModal {
 
 #[cfg(test)]
 mod tests {
+    use super::super::toggle_tag;
     use super::*;
 
     #[test]
     fn toggling_tag_adds_and_removes_id_without_duplicates() {
         let mut modal = AddItemModal::new("Cat".to_string(), Vec::new());
-        modal.toggle_tag(3, true);
-        modal.toggle_tag(3, true);
+        toggle_tag(&mut modal.selected_tag_ids, 3, true);
+        toggle_tag(&mut modal.selected_tag_ids, 3, true);
         assert_eq!(modal.selected_tag_ids, vec![3]);
-        modal.toggle_tag(3, false);
+        toggle_tag(&mut modal.selected_tag_ids, 3, false);
         assert!(modal.selected_tag_ids.is_empty());
     }
 }

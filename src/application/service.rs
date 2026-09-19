@@ -9,8 +9,7 @@ pub struct TrackerService<S: DataStore> {
 
 impl<S: DataStore> TrackerService<S> {
     pub fn new(store: S) -> Result<Self, AppError> {
-        let mut data = store.load()?.unwrap_or_default();
-        data.normalize();
+        let data = store.load()?.unwrap_or_default();
         Ok(Self {
             model: TrackerModel::new(data),
             store,
@@ -189,6 +188,26 @@ mod tests {
 
         assert!(service.model().data.categories.contains_key("Cat"));
         assert!(service.model().get_item("Cat", "Item").is_ok());
+    }
+
+    #[test]
+    fn new_normalizes_legacy_data_through_the_model() {
+        let mut data = seeded_data();
+        let tag = data.create_tag("Pinned".to_string(), [1, 2, 3]).unwrap();
+        data.categories
+            .get_mut("Cat")
+            .unwrap()
+            .items
+            .get_mut("Item")
+            .unwrap()
+            .tag_ids = vec![tag, 999, tag];
+
+        let service = TrackerService::new(MockStore::new(Some(data))).unwrap();
+
+        assert_eq!(
+            service.model().get_item("Cat", "Item").unwrap().tag_ids,
+            vec![tag]
+        );
     }
 
     #[test]

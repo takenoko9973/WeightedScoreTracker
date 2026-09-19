@@ -108,10 +108,20 @@ impl WeightedScoreTracker {
                 // カテゴリが変わったら入力欄をリセット
                 self.central_panel.clear_input();
             }
-            Action::AddCategory(name) => self.add_category(name),
-            Action::RenameCategory(old_name, new_name) => self.rename_category(old_name, new_name),
+            Action::AddCategory(name) => {
+                if let Err(err) = self.service.add_category(name) {
+                    self.state.error_message = Some(err.to_string());
+                }
+            }
+            Action::RenameCategory(old_name, new_name) => {
+                if let Err(err) = self.service.rename_category(&old_name, new_name) {
+                    self.state.error_message = Some(err.to_string());
+                }
+            }
             Action::AddItem(cat, name, subtitle, decay, tag_ids) => {
-                self.add_item(cat, name, subtitle, decay, tag_ids)
+                if let Err(err) = self.service.add_item(&cat, name, subtitle, &decay, tag_ids) {
+                    self.state.error_message = Some(err.to_string());
+                }
             }
             Action::AddScore(text) => self.add_score(text),
             Action::UpdateItem(
@@ -123,13 +133,31 @@ impl WeightedScoreTracker {
                 decay_str,
                 tag_ids,
             ) => {
-                self.update_item(
-                    old_cat, old_item, new_cat, new_name, subtitle, decay_str, tag_ids,
-                );
+                let old_loc = (old_cat.as_str(), old_item.as_str());
+                let new_loc = (new_cat.as_str(), new_name.as_str());
+
+                if let Err(err) = self
+                    .service
+                    .update_item(old_loc, new_loc, subtitle, &decay_str, tag_ids)
+                {
+                    self.state.error_message = Some(err.to_string());
+                }
             }
-            Action::ExecuteDeleteCategory(name) => self.execute_delete_category(name),
-            Action::ExecuteDeleteItem(cat, item) => self.execute_delete_item(cat, item),
-            Action::ExecuteDeleteScore(idx) => self.execute_delete_score(idx),
+            Action::ExecuteDeleteCategory(name) => {
+                if let Err(err) = self.service.delete_category(&name) {
+                    self.state.error_message = Some(err.to_string());
+                }
+            }
+            Action::ExecuteDeleteItem(cat, item) => {
+                if let Err(err) = self.service.delete_item(&cat, &item) {
+                    self.state.error_message = Some(err.to_string());
+                }
+            }
+            Action::ExecuteDeleteScore(idx) => {
+                if let Err(err) = self.service.delete_score_from_selection(idx) {
+                    self.state.error_message = Some(err.to_string());
+                }
+            }
             Action::CreateTag(name, color) => self.create_tag(name, color),
             Action::UpdateTag(id, name, color) => self.update_tag(id, name, color),
             Action::DeleteTag(id) => self.delete_tag(id),
@@ -140,37 +168,6 @@ impl WeightedScoreTracker {
     // データ操作
     // ======================================
 
-    /// カテゴリ登録
-    fn add_category(&mut self, name: String) {
-        if let Err(err) = self.service.add_category(name) {
-            self.state.error_message = Some(err.to_string());
-        }
-    }
-
-    /// カテゴリ名変更
-    fn rename_category(&mut self, old_name: String, new_name: String) {
-        if let Err(err) = self.service.rename_category(&old_name, new_name) {
-            self.state.error_message = Some(err.to_string());
-        }
-    }
-
-    /// 項目追加
-    fn add_item(
-        &mut self,
-        cat_name: String,
-        name: String,
-        subtitle: String,
-        decay_str: String,
-        tag_ids: Vec<crate::domain::TagId>,
-    ) {
-        if let Err(err) = self
-            .service
-            .add_item(&cat_name, name, subtitle, &decay_str, tag_ids)
-        {
-            self.state.error_message = Some(err.to_string());
-        }
-    }
-
     /// スコア追加
     fn add_score(&mut self, text: String) {
         match self.service.add_score_to_selection(&text) {
@@ -178,29 +175,6 @@ impl WeightedScoreTracker {
                 self.central_panel.clear_input();
             }
             Err(err) => self.state.error_message = Some(err.to_string()),
-        }
-    }
-
-    /// 項目の更新処理
-    #[allow(clippy::too_many_arguments)]
-    fn update_item(
-        &mut self,
-        old_cat: String,
-        old_item: String,
-        new_cat: String,
-        new_item: String,
-        subtitle: String,
-        decay_str: String,
-        tag_ids: Vec<crate::domain::TagId>,
-    ) {
-        let old_loc = (old_cat.as_str(), old_item.as_str());
-        let new_loc = (new_cat.as_str(), new_item.as_str());
-
-        if let Err(err) = self
-            .service
-            .update_item(old_loc, new_loc, subtitle, &decay_str, tag_ids)
-        {
-            self.state.error_message = Some(err.to_string());
         }
     }
 
@@ -230,27 +204,6 @@ impl WeightedScoreTracker {
     fn open_tag_manager(&mut self) {
         let tags = self.service.model().tags().values().cloned().collect();
         self.modal_layer.open(TagManagerModal::new(tags));
-    }
-
-    /// カテゴリ削除実行
-    fn execute_delete_category(&mut self, name: String) {
-        if let Err(err) = self.service.delete_category(&name) {
-            self.state.error_message = Some(err.to_string());
-        }
-    }
-
-    /// 項目削除
-    fn execute_delete_item(&mut self, cat: String, item: String) {
-        if let Err(err) = self.service.delete_item(&cat, &item) {
-            self.state.error_message = Some(err.to_string());
-        }
-    }
-
-    /// スコア削除
-    fn execute_delete_score(&mut self, idx: usize) {
-        if let Err(err) = self.service.delete_score_from_selection(idx) {
-            self.state.error_message = Some(err.to_string());
-        }
     }
 }
 
