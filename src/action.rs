@@ -1,4 +1,4 @@
-use crate::domain::{MoveDirection, TagId};
+use crate::domain::TagId;
 
 /// アプリケーション内で発生する操作
 #[derive(Debug, Clone)]
@@ -26,6 +26,4 @@ pub enum Action {
     CreateTag(String, [u8; 3]),
     UpdateTag(TagId, String, [u8; 3]),
     DeleteTag(TagId),
-    MoveCategory(String, MoveDirection),
-    MoveItem(String, String, MoveDirection),
 }

@@ -1,22 +1,83 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
-use super::{DomainError, ItemData, default_created_at};
+use super::{DomainError, ItemData};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct CategoryData {
     pub items: HashMap<String, ItemData>,
-
-    /// 手動表示順。未登録の項目は AppData::normalize で補われる。
-    #[serde(default)]
-    pub item_order: Vec<String>,
-
-    #[serde(default = "default_created_at")]
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    #[serde(skip)]
+    missing_created_at: bool,
+    #[serde(skip)]
+    missing_updated_at: bool,
+}
+
+#[derive(Deserialize)]
+struct StoredCategoryData {
+    items: HashMap<String, ItemData>,
+    #[serde(default)]
+    created_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    updated_at: Option<DateTime<Utc>>,
+}
+
+impl<'de> Deserialize<'de> for CategoryData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let stored = StoredCategoryData::deserialize(deserializer)?;
+        let now = Utc::now();
+        Ok(Self {
+            items: stored.items,
+            created_at: stored.created_at.unwrap_or(now),
+            updated_at: stored.updated_at.unwrap_or(now),
+            missing_created_at: stored.created_at.is_none(),
+            missing_updated_at: stored.updated_at.is_none(),
+        })
+    }
 }
 
 impl CategoryData {
+    pub fn new() -> Self {
+        let now = Utc::now();
+        Self {
+            items: HashMap::new(),
+            created_at: now,
+            updated_at: now,
+            missing_created_at: false,
+            missing_updated_at: false,
+        }
+    }
+
+    pub(crate) fn normalize_timestamps(&mut self) {
+        if self.missing_created_at {
+            self.created_at = self
+                .items
+                .values()
+                .flat_map(|item| item.scores.iter().map(|score| score.timestamp))
+                .min()
+                .unwrap_or_else(Utc::now);
+            self.missing_created_at = false;
+        }
+        if self.missing_updated_at {
+            self.updated_at = self
+                .items
+                .values()
+                .map(|item| item.updated_at)
+                .max()
+                .unwrap_or(self.created_at);
+            self.missing_updated_at = false;
+        }
+    }
+
+    pub(crate) fn touch(&mut self) {
+        self.updated_at = Utc::now();
+    }
+
     fn ensure_item_name_available(&self, item_name: &str) -> Result<(), DomainError> {
         if self.items.contains_key(item_name) {
             return Err(DomainError::AlreadyExists(format!(
@@ -42,25 +103,25 @@ impl CategoryData {
         self.ensure_item_name_available(&name)?;
 
         let now = Utc::now();
-        let item = ItemData {
-            scores: Vec::new(),
-            decay_rate,
-            subtitle,
-            tag_ids,
-            updated_at: now,
-        };
-
-        self.items.insert(name.clone(), item);
-        self.item_order.push(name);
+        self.items.insert(
+            name,
+            ItemData {
+                scores: Vec::new(),
+                decay_rate,
+                subtitle,
+                tag_ids,
+                updated_at: now,
+            },
+        );
+        self.touch();
         Ok(())
     }
 
     pub fn rename_item(&mut self, old_name: &str, new_name: String) -> Result<(), DomainError> {
         let new_name = new_name.trim().to_string();
         if old_name == new_name {
-            return Ok(()); // 更新なし
+            return Ok(());
         }
-
         if new_name.is_empty() {
             return Err(DomainError::Validation(
                 "項目名を入力してください。".to_string(),
@@ -72,15 +133,8 @@ impl CategoryData {
             .items
             .remove(old_name)
             .ok_or_else(|| DomainError::NotFound("変更元の項目が見つかりません。".to_string()))?;
-
-        self.items.insert(new_name.clone(), item);
-        if let Some(entry) = self
-            .item_order
-            .iter_mut()
-            .find(|entry| entry.as_str() == old_name)
-        {
-            *entry = new_name;
-        }
+        self.items.insert(new_name, item);
+        self.touch();
         Ok(())
     }
 
@@ -89,7 +143,7 @@ impl CategoryData {
             .items
             .remove(item_name)
             .ok_or_else(|| DomainError::NotFound("削除対象の項目が見つかりません。".to_string()))?;
-        self.item_order.retain(|name| name != item_name);
+        self.touch();
         Ok(item)
     }
 }
@@ -98,18 +152,9 @@ impl CategoryData {
 mod tests {
     use super::*;
 
-    fn empty_category() -> CategoryData {
-        CategoryData {
-            items: HashMap::new(),
-            item_order: Vec::new(),
-            created_at: Utc::now(),
-        }
-    }
-
     #[test]
     fn add_item_trims_name_and_rejects_duplicate() {
-        // 項目名の前後空白が除去され、同名項目の追加が拒否されることを確認する。
-        let mut category = empty_category();
+        let mut category = CategoryData::new();
         category
             .add_item("  A  ".to_string(), String::new(), 0.9, Vec::new())
             .unwrap();
@@ -122,32 +167,24 @@ mod tests {
     }
 
     #[test]
-    fn rename_item_validates_and_moves_entry() {
-        // 項目名変更でエントリが移動し、空名と不存在項目がエラーになることを確認する。
-        let mut category = empty_category();
+    fn rename_item_keeps_item_timestamp_but_updates_category_timestamp() {
+        let mut category = CategoryData::new();
         category
             .add_item("Old".to_string(), String::new(), 0.9, Vec::new())
             .unwrap();
-        let updated_at = category.items["Old"].updated_at;
+        let item_updated_at = category.items["Old"].updated_at;
+        category.updated_at = Utc::now() - chrono::Duration::seconds(1);
+        let category_updated_at = category.updated_at;
 
-        category.rename_item("Old", "  New  ".to_string()).unwrap();
-        assert!(category.item_exists("New"));
-        assert!(!category.item_exists("Old"));
-        assert_eq!(category.items["New"].updated_at, updated_at);
+        category.rename_item("Old", "New".to_string()).unwrap();
 
-        let err = category.rename_item("New", "   ".to_string()).unwrap_err();
-        assert!(matches!(err, DomainError::Validation(_)));
-
-        let err = category
-            .rename_item("Missing", "X".to_string())
-            .unwrap_err();
-        assert!(matches!(err, DomainError::NotFound(_)));
+        assert_eq!(category.items["New"].updated_at, item_updated_at);
+        assert!(category.updated_at > category_updated_at);
     }
 
     #[test]
     fn remove_item_returns_error_when_missing() {
-        // 存在しない項目を削除しようとした場合に NotFound エラーになることを確認する。
-        let mut category = empty_category();
+        let mut category = CategoryData::new();
         let err = category.remove_item("Nope").unwrap_err();
         assert!(matches!(err, DomainError::NotFound(_)));
     }

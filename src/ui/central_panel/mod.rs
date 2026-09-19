@@ -5,7 +5,8 @@ mod score_input;
 use crate::action::Action;
 use crate::domain::{ItemData, TrackerModel};
 use crate::logic::calculate_stats;
-use crate::ui::central_panel::chart::{ChartSettings, WeightedAverageMode, WeightedScoreChart};
+use crate::ui::central_panel::chart::WeightedScoreChart;
+pub(crate) use crate::ui::central_panel::chart::{ChartSettings, WeightedAverageMode};
 use crate::ui::central_panel::history::HistoryList;
 use crate::ui::central_panel::score_input::ScoreInput;
 use crate::utils::comma_display::CommaDisplay;
@@ -13,6 +14,7 @@ use eframe::egui::{self};
 
 const INPUT_TO_ITEM_SETTINGS_GAP: f32 = 8.0;
 const ITEM_TO_CHART_SETTINGS_GAP: f32 = 8.0;
+pub(crate) const CHART_SETTINGS_STORAGE_KEY: &str = "weighted_score_tracker.chart_settings";
 
 fn item_settings_action(cat_name: &str, item_name: &str, clicked: bool) -> Option<Action> {
     clicked.then(|| Action::ShowEditItemModal(cat_name.to_string(), item_name.to_string()))
@@ -28,15 +30,27 @@ pub struct CentralPanel {
 }
 
 impl CentralPanel {
-    pub fn new() -> Self {
+    pub fn new(storage: Option<&dyn eframe::Storage>) -> Self {
+        let chart_settings: ChartSettings = storage
+            .and_then(|storage| eframe::get_value(storage, CHART_SETTINGS_STORAGE_KEY))
+            .unwrap_or_default();
+
         Self {
             score_input_text: String::new(),
-            weighted_average_mode: WeightedAverageMode::Current,
-            show_weighted_std_band: false,
+            weighted_average_mode: chart_settings.average_mode,
+            show_weighted_std_band: chart_settings.show_std_band,
 
             selected_index: None,   // 選択中インデックス
             scroll_req_index: None, // リストに対するスクロール処理用インデックス
         }
+    }
+
+    pub(crate) fn save(&self, storage: &mut dyn eframe::Storage) {
+        let chart_settings = ChartSettings {
+            average_mode: self.weighted_average_mode,
+            show_std_band: self.show_weighted_std_band,
+        };
+        eframe::set_value(storage, CHART_SETTINGS_STORAGE_KEY, &chart_settings);
     }
 
     pub fn show(
@@ -232,7 +246,7 @@ mod tests {
     #[test]
     fn central_panel_defaults_to_current_average_without_std_band() {
         // パネル初期状態は既存挙動の現在値表示で、標準偏差帯は非表示になっていることを確認する。
-        let panel = CentralPanel::new();
+        let panel = CentralPanel::new(None);
         assert_eq!(panel.weighted_average_mode, WeightedAverageMode::Current);
         assert!(!panel.show_weighted_std_band);
     }

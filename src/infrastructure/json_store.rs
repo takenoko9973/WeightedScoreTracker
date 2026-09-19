@@ -135,7 +135,7 @@ mod tests {
             .expect("failed to load test data")
             .expect("expected data");
         assert!(loaded.categories.contains_key("test"));
-        assert_eq!(loaded.category_order, vec!["test"]);
+        assert_eq!(loaded.ordered_category_names(), vec!["test"]);
         assert_eq!(loaded.tags.get(&tag_id).unwrap().color, [255, 200, 0]);
         let item = loaded.get_item("test", "item").unwrap();
         assert_eq!(item.subtitle, "毎週更新");

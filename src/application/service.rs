@@ -1,4 +1,4 @@
-use crate::domain::{MoveDirection, TagId, TrackerModel};
+use crate::domain::{TagId, TrackerModel};
 
 use super::{AppError, DataStore};
 
@@ -33,13 +33,11 @@ impl<S: DataStore> TrackerService<S> {
     }
 
     pub fn add_category(&mut self, name: String) -> Result<(), AppError> {
-        self.model.add_category(name)?;
-        self.persist()
+        self.mutate(|model| Ok(model.add_category(name)?))
     }
 
     pub fn rename_category(&mut self, old_name: &str, new_name: String) -> Result<(), AppError> {
-        self.model.rename_category(old_name, new_name)?;
-        self.persist()
+        self.mutate(|model| Ok(model.rename_category(old_name, new_name)?))
     }
 
     pub fn add_item(
@@ -51,9 +49,7 @@ impl<S: DataStore> TrackerService<S> {
         tag_ids: Vec<TagId>,
     ) -> Result<(), AppError> {
         let decay_rate = parse_f64(decay_input, "有効な数値を入力してください。")?;
-        self.model
-            .add_item(category, item_name, subtitle, decay_rate, tag_ids)?;
-        self.persist()
+        self.mutate(|model| Ok(model.add_item(category, item_name, subtitle, decay_rate, tag_ids)?))
     }
 
     pub fn add_score_to_selection(&mut self, score_input: &str) -> Result<(), AppError> {
@@ -62,8 +58,7 @@ impl<S: DataStore> TrackerService<S> {
             .ok_or_else(|| AppError::Domain("項目が選択されていません。".into()))?;
 
         let score = parse_i64(score_input, "スコアには整数値を入力してください。")?;
-        self.model.add_score(&cat, &item, score)?;
-        self.persist()
+        self.mutate(|model| Ok(model.add_score(&cat, &item, score)?))
     }
 
     pub fn update_item(
@@ -75,19 +70,15 @@ impl<S: DataStore> TrackerService<S> {
         tag_ids: Vec<TagId>,
     ) -> Result<(), AppError> {
         let decay = parse_f64(decay_input, "有効な数値を入力してください。")?;
-        self.model
-            .update_item(old_loc, new_loc, subtitle, decay, tag_ids)?;
-        self.persist()
+        self.mutate(|model| Ok(model.update_item(old_loc, new_loc, subtitle, decay, tag_ids)?))
     }
 
     pub fn delete_category(&mut self, category_name: &str) -> Result<(), AppError> {
-        self.model.remove_category(category_name)?;
-        self.persist()
+        self.mutate(|model| Ok(model.remove_category(category_name)?))
     }
 
     pub fn delete_item(&mut self, category: &str, item: &str) -> Result<(), AppError> {
-        self.model.remove_item(category, item)?;
-        self.persist()
+        self.mutate(|model| Ok(model.remove_item(category, item)?))
     }
 
     pub fn delete_score_from_selection(&mut self, index: usize) -> Result<(), AppError> {
@@ -95,39 +86,19 @@ impl<S: DataStore> TrackerService<S> {
             .selected_item_pair()
             .ok_or_else(|| AppError::Domain("項目が選択されていません。".into()))?;
 
-        self.model.remove_score(&cat, &item, index)?;
-        self.persist()
+        self.mutate(|model| Ok(model.remove_score(&cat, &item, index)?))
     }
 
     pub fn create_tag(&mut self, name: String, color: [u8; 3]) -> Result<TagId, AppError> {
-        let id = self.model.create_tag(name, color)?;
-        self.persist()?;
-        Ok(id)
+        self.mutate(|model| Ok(model.create_tag(name, color)?))
     }
 
     pub fn update_tag(&mut self, id: TagId, name: String, color: [u8; 3]) -> Result<(), AppError> {
-        self.model.update_tag(id, name, color)?;
-        self.persist()
+        self.mutate(|model| Ok(model.update_tag(id, name, color)?))
     }
 
     pub fn delete_tag(&mut self, id: TagId) -> Result<(), AppError> {
-        self.model.delete_tag(id)?;
-        self.persist()
-    }
-
-    pub fn move_category(&mut self, name: &str, direction: MoveDirection) -> Result<(), AppError> {
-        self.model.move_category(name, direction)?;
-        self.persist()
-    }
-
-    pub fn move_item_in_order(
-        &mut self,
-        category: &str,
-        item: &str,
-        direction: MoveDirection,
-    ) -> Result<(), AppError> {
-        self.model.move_item_in_order(category, item, direction)?;
-        self.persist()
+        self.mutate(|model| Ok(model.delete_tag(id)?))
     }
 
     fn selected_item_pair(&self) -> Option<(String, String)> {
@@ -136,8 +107,15 @@ impl<S: DataStore> TrackerService<S> {
         Some((category, item))
     }
 
-    fn persist(&self) -> Result<(), AppError> {
-        self.store.save(&self.model.data)
+    fn mutate<T>(
+        &mut self,
+        change: impl FnOnce(&mut TrackerModel) -> Result<T, AppError>,
+    ) -> Result<T, AppError> {
+        let mut candidate = self.model.clone();
+        let result = change(&mut candidate)?;
+        self.store.save(&candidate.data)?;
+        self.model = candidate;
+        Ok(result)
     }
 }
 
@@ -272,5 +250,60 @@ mod tests {
 
         let err = service.add_category("Cat".to_string()).unwrap_err();
         assert!(matches!(err, AppError::Persistence(_)));
+        assert!(!service.model().data.categories.contains_key("Cat"));
+    }
+
+    #[test]
+    fn failed_save_after_adding_score_preserves_timestamps_and_model_state() {
+        let mut store = MockStore::new(Some(seeded_data()));
+        store.fail_on_save = true;
+        let save_calls = Rc::clone(&store.save_calls);
+        let mut service = TrackerService::new(store).unwrap();
+        service.select_item("Cat".to_string(), "Item".to_string());
+
+        let previous_data = serde_json::to_value(&service.model().data).unwrap();
+        let previous_selection = service.model().selection.clone();
+        let previous_item_updated_at = service.model().get_item("Cat", "Item").unwrap().updated_at;
+        let previous_category_updated_at = service.model().data.categories["Cat"].updated_at;
+
+        let err = service.add_score_to_selection("10").unwrap_err();
+
+        assert!(matches!(err, AppError::Persistence(_)));
+        assert_eq!(
+            serde_json::to_value(&service.model().data).unwrap(),
+            previous_data
+        );
+        assert_eq!(service.model().selection, previous_selection);
+        assert_eq!(
+            service.model().get_item("Cat", "Item").unwrap().updated_at,
+            previous_item_updated_at
+        );
+        assert_eq!(
+            service.model().data.categories["Cat"].updated_at,
+            previous_category_updated_at
+        );
+        assert_eq!(*save_calls.borrow(), 1);
+    }
+
+    #[test]
+    fn failed_save_after_deleting_selected_item_preserves_selection_and_data() {
+        let mut store = MockStore::new(Some(seeded_data()));
+        store.fail_on_save = true;
+        let mut service = TrackerService::new(store).unwrap();
+        service.select_item("Cat".to_string(), "Item".to_string());
+        service.model.selection.history_index = Some(0);
+
+        let previous_data = serde_json::to_value(&service.model().data).unwrap();
+        let previous_selection = service.model().selection.clone();
+
+        let err = service.delete_item("Cat", "Item").unwrap_err();
+
+        assert!(matches!(err, AppError::Persistence(_)));
+        assert_eq!(
+            serde_json::to_value(&service.model().data).unwrap(),
+            previous_data
+        );
+        assert_eq!(service.model().selection, previous_selection);
+        assert!(service.model().get_item("Cat", "Item").is_ok());
     }
 }
