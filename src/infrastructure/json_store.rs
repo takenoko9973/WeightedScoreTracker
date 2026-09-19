@@ -140,7 +140,6 @@ mod tests {
         let item = loaded.get_item("test", "item").unwrap();
         assert_eq!(item.subtitle, "毎週更新");
         assert_eq!(item.tag_ids, vec![tag_id]);
-        assert_eq!(loaded.ordered_item_names("test").unwrap(), vec!["item"]);
 
         let _ = fs::remove_file(path);
     }

@@ -18,30 +18,30 @@ impl SidePanel {
 
     pub fn show(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut egui::Ui,
         model: &TrackerModel,
         state: &mut UiState,
         enabled: bool,
     ) -> Option<Action> {
         let mut action = None;
 
-        egui::SidePanel::left("side_panel")
+        egui::Panel::left("side_panel")
             .resizable(true)
-            .default_width(SIDE_PANEL_WIDTH)
-            .min_width(SIDE_PANEL_MIN_WIDTH)
-            .max_width(SIDE_PANEL_MAX_WIDTH)
-            .show(ctx, |ui| {
+            .default_size(SIDE_PANEL_WIDTH)
+            .min_size(SIDE_PANEL_MIN_WIDTH)
+            .max_size(SIDE_PANEL_MAX_WIDTH)
+            .show(ui, |ui| {
                 if !enabled {
                     ui.disable();
                 }
 
-                egui::TopBottomPanel::top("header_panel").show_inside(ui, |ui| {
+                egui::Panel::top("header_panel").show(ui, |ui| {
                     if let Some(header_action) = show_header(ui, &model.data.tags, state) {
                         action = Some(header_action);
                     }
                 });
 
-                egui::CentralPanel::default().show_inside(ui, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
                     if let Some(list_action) =
                         category_list::show(ui, &model.data, &model.selection, state)
                     {

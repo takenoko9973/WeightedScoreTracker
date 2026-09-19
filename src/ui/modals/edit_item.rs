@@ -1,4 +1,4 @@
-use super::{Modal, ModalResult, tag_chip};
+use super::{Modal, ModalResult, show_tag_chips, sort_tags};
 use crate::action::Action;
 use crate::constants::{MAX_DECAY_RATE, MIN_DECAY_RATE};
 use crate::domain::{TagData, TagId};
@@ -32,7 +32,7 @@ impl EditItemModal {
         categories: Vec<String>,
         mut tags: Vec<TagData>,
     ) -> Self {
-        tags.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_tags(&mut tags);
         Self {
             target_cat: cat_name.clone(),
             target_item: item_name.clone(),
@@ -43,16 +43,6 @@ impl EditItemModal {
             available_categories: categories,
             available_tags: tags,
             selected_tag_ids: current_tag_ids,
-        }
-    }
-
-    fn toggle_tag(&mut self, id: TagId, selected: bool) {
-        if selected {
-            if !self.selected_tag_ids.contains(&id) {
-                self.selected_tag_ids.push(id);
-            }
-        } else {
-            self.selected_tag_ids.retain(|tag_id| *tag_id != id);
         }
     }
 
@@ -134,14 +124,7 @@ impl Modal for EditItemModal {
                 egui::ScrollArea::vertical()
                     .max_height(120.0)
                     .show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            for tag in self.available_tags.clone() {
-                                let selected = self.selected_tag_ids.contains(&tag.id);
-                                if tag_chip(ui, &tag, selected).clicked() {
-                                    self.toggle_tag(tag.id, !selected);
-                                }
-                            }
-                        });
+                        show_tag_chips(ui, &self.available_tags, &mut self.selected_tag_ids);
                     });
 
                 ui.add_space(15.0);
@@ -162,6 +145,7 @@ impl Modal for EditItemModal {
 
 #[cfg(test)]
 mod tests {
+    use super::super::toggle_tag;
     use super::*;
 
     fn tag(id: TagId, name: &str) -> TagData {
@@ -185,8 +169,8 @@ mod tests {
         );
 
         assert_eq!(modal.selected_tag_ids, vec![1]);
-        modal.toggle_tag(2, true);
-        modal.toggle_tag(1, false);
+        toggle_tag(&mut modal.selected_tag_ids, 2, true);
+        toggle_tag(&mut modal.selected_tag_ids, 1, false);
 
         assert_eq!(modal.selected_tag_ids, vec![2]);
 

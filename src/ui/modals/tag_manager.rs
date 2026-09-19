@@ -1,4 +1,4 @@
-use super::{Modal, ModalResult};
+use super::{Modal, ModalResult, sort_tags};
 use crate::action::Action;
 use crate::domain::TagData;
 use eframe::egui;
@@ -11,7 +11,7 @@ pub struct TagManagerModal {
 
 impl TagManagerModal {
     pub fn new(mut tags: Vec<TagData>) -> Self {
-        tags.sort_by(|a, b| a.name.cmp(&b.name));
+        sort_tags(&mut tags);
         Self {
             tags,
             new_name: String::new(),

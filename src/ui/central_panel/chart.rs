@@ -1,8 +1,6 @@
 use crate::constants::BAR_BASE_COLOR;
 use crate::domain::ScoreEntry;
-use crate::logic::{
-    PlotParams, StatsPoint, calculate_plot_params, calculate_stats, calculate_stats_series,
-};
+use crate::logic::{StatsPoint, calculate_plot_params, calculate_stats, calculate_stats_series};
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
 use egui_plot::{Bar, BarChart, Corner, Legend, Plot, PlotUi, Polygon};
@@ -91,7 +89,12 @@ impl WeightedScoreChart {
             &history_stats,
             settings.show_std_band,
         );
-        let overlays = plot_overlays(&params, &mean_points, &band_polygons);
+        let overlays = PlotOverlays {
+            mean_points: &mean_points,
+            band_polygons: &band_polygons,
+            min_y: params.min_y,
+            max_y: params.max_y,
+        };
 
         // プロット、クリック処理
         let clicked_idx = self.draw_plot(ui, bars, &boundaries, overlays);
@@ -356,19 +359,6 @@ fn band_between_points(
     ]
 }
 
-fn plot_overlays<'a>(
-    params: &PlotParams,
-    mean_points: &'a [[f64; 2]],
-    band_polygons: &'a [Vec<[f64; 2]>],
-) -> PlotOverlays<'a> {
-    PlotOverlays {
-        mean_points,
-        band_polygons,
-        min_y: params.min_y,
-        max_y: params.max_y,
-    }
-}
-
 /// x座標がどのバーに属するか判定
 fn find_clicked_bar(x: f64, boundaries: &[f64]) -> Option<usize> {
     // クリック場所が負の場合は範囲外確定
@@ -569,21 +559,5 @@ mod tests {
         assert!(one_band[0].iter().flatten().all(|value| value.is_finite()));
         assert_eq!(one_current_line, vec![[0.0, 42.0], [1.0, 42.0]]);
         assert_eq!(one_current_band, one_band);
-    }
-
-    #[test]
-    fn plot_overlays_keep_score_bounds_when_displayed_values_are_outside() {
-        let params = PlotParams {
-            min_y: 0.0,
-            max_y: 10.0,
-        };
-        let mean_points = vec![[0.5, 12.0]];
-        let band_polygons = vec![vec![[0.0, -2.0], [1.0, -2.0], [1.0, 20.0], [0.0, 20.0]]];
-        let overlays = plot_overlays(&params, &mean_points, &band_polygons);
-
-        assert_eq!(
-            (overlays.min_y, overlays.max_y),
-            (params.min_y, params.max_y)
-        );
     }
 }

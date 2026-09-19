@@ -7,7 +7,7 @@ pub mod error;
 pub mod tag_manager;
 
 use crate::action::Action;
-use crate::domain::TagData;
+use crate::domain::{TagData, TagId};
 use crate::ui::modals::error::ErrorModal;
 use crate::ui::state::UiState;
 use eframe::egui;
@@ -21,6 +21,35 @@ fn tag_chip(ui: &mut egui::Ui, tag: &TagData, selected: bool) -> egui::Response 
             .truncate(),
     )
     .on_hover_text(&tag.name)
+}
+
+fn sort_tags(tags: &mut [TagData]) {
+    tags.sort_by(|a, b| a.name.cmp(&b.name));
+}
+
+fn toggle_tag(selected_tag_ids: &mut Vec<TagId>, id: TagId, selected: bool) {
+    if selected {
+        if !selected_tag_ids.contains(&id) {
+            selected_tag_ids.push(id);
+        }
+    } else {
+        selected_tag_ids.retain(|tag_id| *tag_id != id);
+    }
+}
+
+fn show_tag_chips(
+    ui: &mut egui::Ui,
+    available_tags: &[TagData],
+    selected_tag_ids: &mut Vec<TagId>,
+) {
+    ui.horizontal_wrapped(|ui| {
+        for tag in available_tags {
+            let selected = selected_tag_ids.contains(&tag.id);
+            if tag_chip(ui, tag, selected).clicked() {
+                toggle_tag(selected_tag_ids, tag.id, !selected);
+            }
+        }
+    });
 }
 
 /// モーダル管理
