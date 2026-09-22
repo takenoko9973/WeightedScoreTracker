@@ -103,10 +103,16 @@ impl WeightedScoreTracker {
 
             // データ操作系
             Action::SelectItem(cat, item) => {
+                let is_actual_change = self.service.model().selection.category.as_deref()
+                    != Some(cat.as_str())
+                    || self.service.model().selection.item.as_deref() != Some(item.as_str());
                 self.service.select_item(cat, item);
 
                 // カテゴリが変わったら入力欄をリセット
                 self.central_panel.clear_input();
+                if is_actual_change {
+                    self.central_panel.clear_history_selection();
+                }
             }
             Action::AddCategory(name) => {
                 if let Err(err) = self.service.add_category(name) {
@@ -154,8 +160,9 @@ impl WeightedScoreTracker {
                 }
             }
             Action::ExecuteDeleteScore(idx) => {
-                if let Err(err) = self.service.delete_score_from_selection(idx) {
-                    self.state.error_message = Some(err.to_string());
+                match self.service.delete_score_from_selection(idx) {
+                    Ok(()) => self.central_panel.clear_history_selection(),
+                    Err(err) => self.state.error_message = Some(err.to_string()),
                 }
             }
             Action::CreateTag(name, color) => self.create_tag(name, color),
