@@ -16,6 +16,25 @@ const INPUT_TO_ITEM_SETTINGS_GAP: f32 = 8.0;
 const ITEM_TO_CHART_SETTINGS_GAP: f32 = 8.0;
 pub(crate) const CHART_SETTINGS_STORAGE_KEY: &str = "weighted_score_tracker.chart_settings";
 
+#[derive(Clone, Debug, PartialEq)]
+struct ChartDataSignature {
+    category_name: String,
+    item_name: String,
+    scores_in_order: Vec<i64>,
+    decay_rate: f64,
+}
+
+impl ChartDataSignature {
+    fn new(category_name: &str, item_name: &str, item_data: &ItemData) -> Self {
+        Self {
+            category_name: category_name.to_owned(),
+            item_name: item_name.to_owned(),
+            scores_in_order: item_data.scores.iter().map(|entry| entry.score).collect(),
+            decay_rate: item_data.decay_rate,
+        }
+    }
+}
+
 fn item_settings_action(cat_name: &str, item_name: &str, clicked: bool) -> Option<Action> {
     clicked.then(|| Action::ShowEditItemModal(cat_name.to_string(), item_name.to_string()))
 }
@@ -27,6 +46,7 @@ pub struct CentralPanel {
 
     selected_index: Option<usize>,
     scroll_req_index: Option<usize>,
+    previous_chart_data: Option<ChartDataSignature>,
 }
 
 impl CentralPanel {
@@ -42,6 +62,7 @@ impl CentralPanel {
 
             selected_index: None,   // 選択中インデックス
             scroll_req_index: None, // リストに対するスクロール処理用インデックス
+            previous_chart_data: None,
         }
     }
 
@@ -70,6 +91,7 @@ impl CentralPanel {
                 let (Some(cat_name), Some(item_name)) =
                     (&model.selection.category, &model.selection.item)
                 else {
+                    self.previous_chart_data = None;
                     ui.centered_and_justified(|ui| {
                         ui.label("左のリストから項目を選択するか、追加してください");
                     });
@@ -78,6 +100,7 @@ impl CentralPanel {
 
                 // データ取得
                 let Ok(item_data) = model.data.get_item(cat_name, item_name) else {
+                    self.previous_chart_data = None;
                     ui.label("項目データ読み込みエラー");
                     return None;
                 };
@@ -89,6 +112,10 @@ impl CentralPanel {
                 ui.separator();
 
                 // グラフ
+                let chart_data = ChartDataSignature::new(cat_name, item_name, item_data);
+                let reset_bounds = self.previous_chart_data.as_ref() != Some(&chart_data);
+                self.previous_chart_data = Some(chart_data);
+
                 WeightedScoreChart::new().show(
                     ui,
                     &item_data.scores,
@@ -97,6 +124,7 @@ impl CentralPanel {
                         average_mode: self.weighted_average_mode,
                         show_std_band: self.show_weighted_std_band,
                     },
+                    reset_bounds,
                     &mut self.selected_index,
                     &mut self.scroll_req_index,
                 );
@@ -220,6 +248,11 @@ impl CentralPanel {
     pub fn clear_input(&mut self) {
         self.score_input_text.clear();
     }
+
+    pub(crate) fn clear_history_selection(&mut self) {
+        self.selected_index = None;
+        self.scroll_req_index = None;
+    }
 }
 
 #[cfg(test)]
@@ -249,6 +282,72 @@ mod tests {
         let panel = CentralPanel::new(None);
         assert_eq!(panel.weighted_average_mode, WeightedAverageMode::Current);
         assert!(!panel.show_weighted_std_band);
+    }
+
+    #[test]
+    fn chart_data_signature_tracks_only_chart_data() {
+        let same = ChartDataSignature {
+            category_name: "Cat".to_string(),
+            item_name: "Item".to_string(),
+            scores_in_order: vec![10, 20],
+            decay_rate: 0.9,
+        };
+
+        assert_eq!(same, same.clone());
+        assert_ne!(
+            same,
+            ChartDataSignature {
+                category_name: "Other".to_string(),
+                ..same.clone()
+            }
+        );
+        assert_ne!(
+            same,
+            ChartDataSignature {
+                item_name: "Other".to_string(),
+                ..same.clone()
+            }
+        );
+        assert_ne!(
+            same,
+            ChartDataSignature {
+                scores_in_order: vec![10, 30],
+                ..same.clone()
+            }
+        );
+        assert_ne!(
+            same,
+            ChartDataSignature {
+                scores_in_order: vec![20, 10],
+                ..same.clone()
+            }
+        );
+        assert_ne!(
+            same,
+            ChartDataSignature {
+                scores_in_order: vec![10],
+                ..same.clone()
+            }
+        );
+        assert_ne!(
+            same,
+            ChartDataSignature {
+                decay_rate: 0.8,
+                ..same.clone()
+            }
+        );
+    }
+
+    #[test]
+    fn clearing_history_selection_clears_selection_and_scroll_request() {
+        let mut panel = CentralPanel::new(None);
+        panel.selected_index = Some(1);
+        panel.scroll_req_index = Some(1);
+
+        panel.clear_history_selection();
+
+        assert_eq!(panel.selected_index, None);
+        assert_eq!(panel.scroll_req_index, None);
     }
 
     #[test]

@@ -3,7 +3,10 @@ use crate::domain::ScoreEntry;
 use crate::logic::{StatsPoint, calculate_plot_params, calculate_stats, calculate_stats_series};
 use crate::utils::comma_display::CommaDisplay;
 use eframe::egui;
-use egui_plot::{Bar, BarChart, Corner, Legend, Plot, PlotUi, Polygon};
+use egui_plot::{
+    Bar, BarChart, Corner, Legend, Plot, PlotBounds, PlotMemory, PlotResponse, PlotTransform,
+    PlotUi, Polygon,
+};
 use serde::{Deserialize, Serialize};
 use std::iter::zip;
 
@@ -59,6 +62,7 @@ impl WeightedScoreChart {
         scores: &[ScoreEntry],
         decay_rate: f64,
         settings: ChartSettings,
+        reset_bounds: bool,
         selected_index: &mut Option<usize>,
         scroll_req_index: &mut Option<usize>,
     ) {
@@ -97,7 +101,7 @@ impl WeightedScoreChart {
         };
 
         // プロット、クリック処理
-        let clicked_idx = self.draw_plot(ui, bars, &boundaries, overlays);
+        let clicked_idx = self.draw_plot(ui, bars, &boundaries, overlays, reset_bounds);
 
         // クリック結果
         if let Some(idx) = clicked_idx {
@@ -156,28 +160,102 @@ impl WeightedScoreChart {
         bars: Vec<Bar>,
         boundaries: &[f64],
         overlays: PlotOverlays<'_>,
+        reset_bounds: bool,
     ) -> Option<usize> {
         let plot_height = ui.available_height() * 0.6; // 画面の縦幅6割を使用
-        let plot = Plot::new("score_plot")
+        let plot_id = ui.make_persistent_id("score_plot");
+        let uses_default_y_bounds = overlays.min_y < overlays.max_y;
+
+        if !uses_default_y_bounds {
+            restore_fallback_y_bounds(
+                ui.ctx(),
+                plot_id,
+                overlays.min_y,
+                overlays.max_y,
+                reset_bounds,
+            );
+        }
+
+        let mut plot = Plot::new("score_plot")
+            .id(plot_id)
             .height(plot_height) // 固定の高さ
             .legend(Legend::default().position(Corner::RightBottom))
             .show_axes([false, true])
             .show_x(false)
+            .allow_axis_zoom_drag([false, true])
+            .allow_boxed_zoom(false)
             .allow_drag(false)
             .allow_zoom(false)
             .allow_scroll(false)
-            .auto_bounds(egui::Vec2b::new(true, false)) // y軸の自動調整OFF
-            .include_y(overlays.max_y) // 最小値と最大値を設定
-            .include_y(overlays.min_y);
+            .allow_double_click_reset(false)
+            .auto_bounds(egui::Vec2b::new(true, false));
+
+        if uses_default_y_bounds {
+            // Y軸の復帰先はスコア由来の既存計算式だけに限定する。
+            plot = plot.default_y_bounds(overlays.min_y, overlays.max_y);
+        } else {
+            // 空履歴・全同値では default_y_bounds が使えないため、従来の経路を保つ。
+            plot = plot.include_y(overlays.max_y).include_y(overlays.min_y);
+        }
 
         let total_width = bars.iter().map(|bar| bar.bar_width).sum();
-        plot.show(ui, |plot_ui| {
+        let plot_response = plot.show(ui, |plot_ui| {
+            if reset_bounds && uses_default_y_bounds {
+                plot_ui.set_auto_bounds(egui::Vec2b::new(true, true));
+            }
             self.show_standard_deviation_band(plot_ui, overlays.band_polygons);
             self.show_bars(plot_ui, bars);
             self.show_average_line(plot_ui, overlays.mean_points);
-            self.check_click(plot_ui, boundaries, total_width)
-        })
-        .inner
+        });
+
+        let reset_button_response = PlotMemory::load(ui.ctx(), plot_id)
+            .filter(|memory| {
+                if uses_default_y_bounds {
+                    !memory.auto_bounds.y
+                } else {
+                    fallback_y_bounds_are_manual(memory, overlays.min_y, overlays.max_y)
+                }
+            })
+            .map(|_| {
+                let button_position =
+                    plot_response.transform.frame().left_top() + egui::vec2(4.0, 4.0);
+                egui::Area::new(ui.make_persistent_id("score_plot_y_reset"))
+                    .fixed_pos(button_position)
+                    .order(egui::Order::Foreground)
+                    .movable(false)
+                    .enabled(ui.is_enabled())
+                    .show(ui.ctx(), |ui| {
+                        let response = ui
+                            .add(egui::Button::new("↺"))
+                            .on_hover_text("Y軸を自動調整に戻す");
+                        response.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Button,
+                                ui.is_enabled(),
+                                "Y軸を自動調整に戻す",
+                            )
+                        });
+                        response
+                    })
+                    .inner
+            });
+
+        let reset_button_clicked = reset_button_response
+            .as_ref()
+            .is_some_and(egui::Response::clicked);
+        let button_blocks_plot = reset_button_response
+            .as_ref()
+            .is_some_and(egui::Response::contains_pointer);
+
+        if reset_button_clicked && let Some(mut memory) = PlotMemory::load(ui.ctx(), plot_id) {
+            memory.auto_bounds.y = true;
+            memory.store(ui.ctx(), plot_id);
+            ui.ctx().request_repaint();
+        }
+
+        (!button_blocks_plot)
+            .then(|| self.check_click(&plot_response, boundaries, total_width))
+            .flatten()
     }
 
     /// 棒グラフ描画
@@ -225,9 +303,16 @@ impl WeightedScoreChart {
     }
 
     /// クリック判定
-    fn check_click(&self, plot_ui: &PlotUi, boundaries: &[f64], width: f64) -> Option<usize> {
-        let clicked = plot_ui.response().clicked();
-        if clicked && let Some(pos) = plot_ui.pointer_coordinate() {
+    fn check_click(
+        &self,
+        plot_response: &PlotResponse<()>,
+        boundaries: &[f64],
+        width: f64,
+    ) -> Option<usize> {
+        if plot_response.response.clicked()
+            && let Some(position) = plot_response.response.interact_pointer_pos()
+        {
+            let pos = plot_response.transform.value_from_position(position);
             // グラフ範囲内のクリックなら、どのバーかを探す
             if (0.0..=width).contains(&pos.x) {
                 return find_clicked_bar(pos.x, boundaries);
@@ -238,6 +323,53 @@ impl WeightedScoreChart {
         }
         None
     }
+}
+
+fn restore_fallback_y_bounds(
+    ctx: &egui::Context,
+    plot_id: egui::Id,
+    min_y: f64,
+    max_y: f64,
+    reset_bounds: bool,
+) {
+    let Some(mut memory) = PlotMemory::load(ctx, plot_id) else {
+        return;
+    };
+
+    if !reset_bounds && !memory.auto_bounds.y {
+        return;
+    }
+
+    // include_y と同じ無効なY範囲を渡し、egui_plotの従来の初期化処理で表示範囲を復帰する。
+    let bounds = fallback_y_bounds(*memory.bounds(), *memory.transform().frame(), min_y, max_y);
+    memory.set_bounds(bounds);
+    memory.auto_bounds.x = reset_bounds || memory.auto_bounds.x;
+    memory.auto_bounds.y = false;
+    memory.store(ctx, plot_id);
+}
+
+fn fallback_y_transform(frame: egui::Rect, min_y: f64, max_y: f64) -> PlotTransform {
+    let bounds = PlotBounds::from_min_max([f64::INFINITY, min_y], [f64::NEG_INFINITY, max_y]);
+    PlotTransform::new(frame, bounds, false)
+}
+
+fn fallback_y_bounds(
+    current_bounds: PlotBounds,
+    frame: egui::Rect,
+    min_y: f64,
+    max_y: f64,
+) -> PlotBounds {
+    let mut bounds = current_bounds;
+    bounds.set_y(fallback_y_transform(frame, min_y, max_y).bounds());
+    bounds
+}
+
+fn fallback_y_bounds_are_manual(memory: &PlotMemory, min_y: f64, max_y: f64) -> bool {
+    !memory.auto_bounds.y
+        && memory.bounds().range_y()
+            != fallback_y_transform(*memory.transform().frame(), min_y, max_y)
+                .bounds()
+                .range_y()
 }
 
 /// 重みを既存バーの中心座標へ変換する。
@@ -378,6 +510,17 @@ mod tests {
         let centers = bar_centers(&[0.25, 0.5, 1.0]);
 
         assert_eq!(centers, vec![0.125, 0.5, 1.25]);
+    }
+
+    #[test]
+    fn fallback_y_bounds_keep_the_existing_y_initialization_and_current_x_range() {
+        let frame = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 100.0));
+        let current_bounds = PlotBounds::from_min_max([10.0, 20.0], [30.0, 40.0]);
+
+        let bounds = fallback_y_bounds(current_bounds, frame, 42.0, 42.0);
+
+        assert_eq!(bounds.range_x(), 10.0..=30.0);
+        assert_eq!(bounds.range_y(), 41.5..=42.5);
     }
 
     #[test]

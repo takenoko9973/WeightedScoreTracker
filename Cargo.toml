@@ -1,19 +1,39 @@
 [package]
 name = "WeightedScoreTracker"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2024"
 
 [dependencies]
-eframe = { version = "0.36", features = ["persistence"] } # GUI本体
-egui_plot = "0.37"                                        # グラフ描画
-serde = { version = "1.0", features = ["derive"] }        # シリアライズ
-serde_json = "1.0"                                        # JSON操作
-chrono = { version = "0.4", features = ["serde"] }        # 日時操作
+# GUI本体
+eframe = { version = "0.36", default-features = false, features = [
+    "wgpu_no_default_features",
+    "default_fonts",
+    "persistence",
+    "wayland",
+    "x11",
+] }
+# グラフ描画
+egui_plot = "0.37"
+# OpenGL バックエンド
+wgpu = { version = "30.0", default-features = false, features = ["gles"] }
+# シリアライズ
+serde = { version = "1.0", features = ["derive"] }
+# JSON操作
+serde_json = "1.0"
+# 日時操作
+chrono = { version = "0.4", features = ["serde"] }
 num-format = "0.4"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# eframe の既定機能を絞っても、既存の Wayland 起動とウィンドウ装飾を維持する。
+winit = { version = "0.30", default-features = false, features = [
+    "wayland-csd-adwaita",
+    "wayland-dlopen",
+] }
 
 [profile.release]
 opt-level = 3     # 最高レベルの最適化
-lto = true        # Link Time Optimization (ビルドは遅くなるが速くなる)
+lto = "fat"       # Link Time Optimization (ビルドは遅くなるが速くなる)
 codegen-units = 1 # 並列生成数を1にして最適化精度を上げる (ビルドは遅くなる)
 panic = "abort"   # パニック時にスタック巻き戻しをせず強制終了 (サイズ削減・高速化)
 strip = true      # 自動でstripする (Rust 1.59以降)

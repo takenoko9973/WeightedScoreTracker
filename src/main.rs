@@ -18,10 +18,17 @@ use ui::fonts::setup_custom_fonts;
 
 fn main() -> eframe::Result<()> {
     // ウィンドウ設定
-    let options = eframe::NativeOptions {
+    let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([WINDOW_WIDTH, WINDOW_HEIGHT]),
         ..Default::default()
     };
+
+    // この環境では Vulkan/DX12 のウィンドウ移動がカクつくため、検証済みの GL に固定する。
+    let eframe::egui_wgpu::WgpuSetup::CreateNew(ref mut setup) = options.wgpu_options.wgpu_setup
+    else {
+        unreachable!("既定の wgpu 設定は新規インスタンスを作成する");
+    };
+    setup.instance_descriptor.backends = eframe::wgpu::Backends::GL;
 
     eframe::run_native(
         "Weighted Score Tracker",

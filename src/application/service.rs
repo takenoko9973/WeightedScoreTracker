@@ -1,4 +1,5 @@
 use crate::domain::{TagId, TrackerModel};
+use num_format::{Locale, ToFormattedString, parsing::ParseFormatted};
 
 use super::{AppError, DataStore};
 
@@ -125,9 +126,42 @@ fn parse_f64(input: &str, message: &str) -> Result<f64, AppError> {
 }
 
 fn parse_i64(input: &str, message: &str) -> Result<i64, AppError> {
-    input
-        .parse::<i64>()
-        .map_err(|_| AppError::Input(message.to_string()))
+    let input_error = || AppError::Input(message.to_string());
+
+    if let Ok(value) = input.parse::<i64>() {
+        return Ok(value);
+    }
+
+    if !input.contains(',') {
+        return Err(input_error());
+    }
+
+    if !input
+        .chars()
+        .all(|character| character.is_ascii_digit() || character == ',')
+    {
+        return Err(input_error());
+    }
+
+    // num-format の i64 カンマ解析は20バイト固定バッファを使うため、符号なし入力の最大19桁を超えて渡さない。
+    if input
+        .chars()
+        .filter(|character| character.is_ascii_digit())
+        .count()
+        > 19
+    {
+        return Err(input_error());
+    }
+
+    let value = input
+        .parse_formatted::<_, i64>(&Locale::en)
+        .map_err(|_| input_error())?;
+
+    if value.to_formatted_string(&Locale::en) != input {
+        return Err(input_error());
+    }
+
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -258,6 +292,99 @@ mod tests {
             1
         );
         assert_eq!(*save_calls.borrow(), 1);
+    }
+
+    #[test]
+    fn parse_i64_accepts_plain_and_canonical_formatted_integers() {
+        for (input, expected) in [
+            ("1234567", 1_234_567),
+            ("1,234,567", 1_234_567),
+            ("123", 123),
+            ("1,234", 1_234),
+            ("12,345", 12_345),
+            ("0", 0),
+            ("-1234", -1_234),
+            ("+1234", 1_234),
+            ("001234", 1_234),
+            ("9223372036854775807", i64::MAX),
+            ("9,223,372,036,854,775,807", i64::MAX),
+        ] {
+            assert_eq!(
+                parse_i64(input, "invalid integer").unwrap(),
+                expected,
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_i64_rejects_noncanonical_formatted_or_invalid_integers() {
+        for input in [
+            "1,23",
+            "12,34,567",
+            "1,,234",
+            ",123",
+            "123,",
+            "001,234",
+            "0,123",
+            "+1,234",
+            "-1,234",
+            "1.5",
+            "1,234.5",
+            "1 234",
+            "１,２３４",
+            "9223372036854775808",
+            "9,223,372,036,854,775,808",
+            "10,000,000,000,000,000,000",
+            "100,000,000,000,000,000,000",
+            "",
+            "not-a-number",
+        ] {
+            assert!(
+                matches!(
+                    parse_i64(input, "invalid integer"),
+                    Err(AppError::Input(message)) if message == "invalid integer"
+                ),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn add_score_to_selection_persists_canonical_formatted_integer() {
+        let store = MockStore::new(Some(seeded_data()));
+        let save_calls = Rc::clone(&store.save_calls);
+        let mut service = TrackerService::new(store).unwrap();
+        service.select_item("Cat".to_string(), "Item".to_string());
+
+        service.add_score_to_selection("1,234,567").unwrap();
+
+        assert_eq!(
+            service.model().get_item("Cat", "Item").unwrap().scores[0].score,
+            1_234_567
+        );
+        assert_eq!(*save_calls.borrow(), 1);
+    }
+
+    #[test]
+    fn add_score_to_selection_does_not_persist_invalid_integer() {
+        let store = MockStore::new(Some(seeded_data()));
+        let save_calls = Rc::clone(&store.save_calls);
+        let mut service = TrackerService::new(store).unwrap();
+        service.select_item("Cat".to_string(), "Item".to_string());
+
+        let err = service.add_score_to_selection("1,23").unwrap_err();
+
+        assert!(matches!(err, AppError::Input(_)));
+        assert!(
+            service
+                .model()
+                .get_item("Cat", "Item")
+                .unwrap()
+                .scores
+                .is_empty()
+        );
+        assert_eq!(*save_calls.borrow(), 0);
     }
 
     #[test]
