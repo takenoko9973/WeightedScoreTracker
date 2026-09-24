@@ -26,7 +26,7 @@ winit = { version = "0.30", default-features = false, features = ["wayland-csd-a
 
 [profile.release]
 opt-level = 3     # 最高レベルの最適化
-lto = true        # Link Time Optimization (ビルドは遅くなるが速くなる)
+lto = "fat"       # Link Time Optimization (ビルドは遅くなるが速くなる)
 codegen-units = 1 # 並列生成数を1にして最適化精度を上げる (ビルドは遅くなる)
 panic = "abort"   # パニック時にスタック巻き戻しをせず強制終了 (サイズ削減・高速化)
 strip = true      # 自動でstripする (Rust 1.59以降)
